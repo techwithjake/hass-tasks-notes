@@ -75,6 +75,10 @@
               <option value="normal">Normal</option>
               <option value="low">Low</option>
             </select>
+            <select id="sort-mode">
+              <option value="priority">↕ Priority</option>
+              <option value="manual">↕ Manual</option>
+            </select>
             <input type="search" id="task-search" placeholder="Search tasks…">
           </div>
         </div>
@@ -109,12 +113,20 @@
           <div class="detail-fields">
             <div class="detail-field">
               <label>Due</label>
-              <input type="text" id="detail-due" placeholder="e.g. tomorrow, next monday" autocomplete="off">
+              <input type="text" id="detail-due" placeholder="e.g. tomorrow at 3pm, 5/28" autocomplete="off">
               <button type="button" class="dp-trigger" id="detail-due-trigger" title="Pick a date">&#128197;</button>
             </div>
             <div class="detail-field">
               <label>Tags</label>
               <input type="text" id="detail-tags" placeholder="comma-separated">
+            </div>
+            <div class="detail-field">
+              <label>Proj</label>
+              <select id="detail-project"></select>
+            </div>
+            <div class="detail-field" id="detail-section-field">
+              <label>Sec</label>
+              <select id="detail-section"></select>
             </div>
           </div>
           <textarea id="detail-notes" placeholder="Add notes (Markdown supported)…" rows="6"></textarea>
@@ -168,6 +180,31 @@
 
   </div><!-- /workspace -->
 </div><!-- /app -->
+
+<!-- Quick Add Modal -->
+<div id="quick-add-modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-content quick-add-content">
+    <div class="modal-body">
+      <input type="text" id="quick-add-title" placeholder="Task name…" autocomplete="off">
+      <div class="quick-add-meta">
+        <select id="quick-add-project"></select>
+        <select id="quick-add-priority">
+          <option value="normal">Normal</option>
+          <option value="high">&#x25B2; High</option>
+          <option value="low">&#x25BC; Low</option>
+        </select>
+        <div class="quick-add-due-wrap">
+          <input type="text" id="quick-add-due" placeholder="Due date" autocomplete="off">
+          <button type="button" class="dp-trigger" id="quick-add-due-trigger" title="Pick a date">&#128197;</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span class="quick-add-hint">Press <kbd>Enter</kbd> to save &middot; <kbd>Esc</kbd> to cancel</span>
+      <button id="quick-add-save-btn" class="btn-primary">Add Task</button>
+    </div>
+  </div>
+</div>
 
 <!-- Project Modal -->
 <div id="project-modal" class="modal hidden" role="dialog" aria-modal="true">

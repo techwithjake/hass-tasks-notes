@@ -21,6 +21,7 @@ const state = {
   statusFilter:   'active',
   priorityFilter: '',
   searchFilter:   '',
+  sortMode:       'priority',   // 'priority' | 'manual'
 
   // Inline form tracking
   openFormSectionId: null,  // null = "no section" (top of project)
@@ -65,109 +66,143 @@ async function api(method, path, body) {
   return res.json();
 }
 
-// ── Natural language date parser ───────────────────────────
+// ── Time parser ────────────────────────────────────────────
+// Returns "HH:MM" (24h) or null.  Accepts: 3pm, 3:30pm, 3:30 pm, 15:00, noon, midnight
+function parseTime(t) {
+  if (!t) return null;
+  const s = t.toLowerCase().trim();
+  if (s === 'noon')     return '12:00';
+  if (s === 'midnight') return '00:00';
+  const m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!m) return null;
+  let h = parseInt(m[1]);
+  const min = parseInt(m[2] || '0');
+  const ampm = m[3];
+  if (ampm === 'pm' && h < 12) h += 12;
+  if (ampm === 'am' && h === 12) h = 0;
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+}
+
+// ── Natural language date/time parser ──────────────────────
+// Returns "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM".
 function parseNaturalDate(input) {
   if (!input || !input.trim()) return null;
-  const s = input.trim().toLowerCase();
+  const raw = input.trim();
+
+  // Already a stored ISO datetime — pass through unchanged
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw)) return raw.slice(0, 16);
+
+  // Split optional time suffix: "tomorrow at 3pm", "5/28 @ 14:00"
+  let datePart = raw, timeSuffix = null;
+  const atSplit = raw.match(/^(.+?)\s+(?:at|@)\s+(.+)$/i);
+  if (atSplit) { datePart = atSplit[1].trim(); timeSuffix = atSplit[2].trim(); }
+
+  const s     = datePart.toLowerCase();
   const today = new Date(); today.setHours(0, 0, 0, 0);
+  let dateIso = null;
 
-  if (s === 'today')     return isoDate(today);
-  if (s === 'tomorrow')  { const d = new Date(today); d.setDate(d.getDate() + 1); return isoDate(d); }
-  if (s === 'yesterday') { const d = new Date(today); d.setDate(d.getDate() - 1); return isoDate(d); }
+  // Named shortcuts
+  if      (s === 'today')     dateIso = isoDate(today);
+  else if (s === 'tomorrow')  { const d = new Date(today); d.setDate(d.getDate() + 1); dateIso = isoDate(d); }
+  else if (s === 'yesterday') { const d = new Date(today); d.setDate(d.getDate() - 1); dateIso = isoDate(d); }
 
-  const DAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-
-  const nextMatch = s.match(/^next\s+(\w+)$/);
-  if (nextMatch) {
-    const di = DAYS.indexOf(nextMatch[1]);
-    if (di !== -1) {
-      const d = new Date(today);
-      let diff = di - d.getDay();
-      if (diff <= 0) diff += 7;
-      d.setDate(d.getDate() + diff);
-      return isoDate(d);
-    }
-  }
-
-  const thisMatch = s.match(/^this\s+(\w+)$/);
-  if (thisMatch) {
-    const di = DAYS.indexOf(thisMatch[1]);
-    if (di !== -1) {
-      const d = new Date(today);
-      let diff = di - d.getDay();
-      if (diff <= 0) diff += 7;
-      d.setDate(d.getDate() + diff);
-      return isoDate(d);
-    }
-  }
-
-  // "in X days/weeks"
-  const inMatch = s.match(/^in\s+(\d+)\s+(day|days|week|weeks)$/);
-  if (inMatch) {
-    const n = parseInt(inMatch[1]);
-    const d = new Date(today);
-    d.setDate(d.getDate() + (inMatch[2].startsWith('week') ? n * 7 : n));
-    return isoDate(d);
-  }
-
-  // "X days from now"
-  const fromNow = s.match(/^(\d+)\s+(day|days|week|weeks)\s+from\s+now$/);
-  if (fromNow) {
-    const n = parseInt(fromNow[1]);
-    const d = new Date(today);
-    d.setDate(d.getDate() + (fromNow[2].startsWith('week') ? n * 7 : n));
-    return isoDate(d);
-  }
-
-  // ── Named month: "Jun 15", "June 15", "Jun 15 2026", "June 15, 2026" ──
-  // Native Date.parse() assigns an unpredictable year for "Mon DD" strings,
-  // so handle these explicitly before falling through to the native parser.
-  const MONTHS_LIST = ['january','february','march','april','may','june',
-                       'july','august','september','october','november','december'];
-  const namedMonth = s.match(/^([a-z]+)\s+(\d{1,2})(?:,?\s+(\d{4}))?$/);
-  if (namedMonth && namedMonth[1].length >= 3) {
-    const mi = MONTHS_LIST.findIndex(m => m.startsWith(namedMonth[1]));
-    if (mi !== -1) {
-      const day = parseInt(namedMonth[2]);
-      if (day >= 1 && day <= 31) {
-        if (namedMonth[3]) {
-          return isoDate(new Date(parseInt(namedMonth[3]), mi, day));
+  // next/this <weekday>
+  if (!dateIso) {
+    const DAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    for (const [pat, offset] of [[/^next\s+(\w+)$/, 0], [/^this\s+(\w+)$/, 0]]) {
+      const m = s.match(pat);
+      if (m) {
+        const di = DAYS.indexOf(m[1]);
+        if (di !== -1) {
+          const d = new Date(today);
+          let diff = di - d.getDay(); if (diff <= 0) diff += 7;
+          d.setDate(d.getDate() + diff);
+          dateIso = isoDate(d); break;
         }
-        const candidate = new Date(today.getFullYear(), mi, day);
-        if (candidate < today) candidate.setFullYear(today.getFullYear() + 1);
-        return isoDate(candidate);
       }
     }
   }
 
-  // ── American date formats ─────────────────────────────────
-  // MM/DD or M/D  (no year → next occurrence of that month/day)
-  const mdOnly = s.match(/^(\d{1,2})\/(\d{1,2})$/);
-  if (mdOnly) {
-    const [, m, d] = mdOnly.map(Number);
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      const candidate = new Date(today.getFullYear(), m - 1, d);
-      // If the date has already passed this year, roll to next year
-      if (candidate < today) candidate.setFullYear(today.getFullYear() + 1);
-      return isoDate(candidate);
+  // "in X days/weeks"
+  if (!dateIso) {
+    const m = s.match(/^in\s+(\d+)\s+(day|days|week|weeks)$/);
+    if (m) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + (m[2].startsWith('week') ? +m[1] * 7 : +m[1]));
+      dateIso = isoDate(d);
     }
   }
 
-  // MM/DD/YY or M/D/YY  (2-digit year — native parser sometimes misreads these)
-  const mdyShort = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
-  if (mdyShort) {
-    const [, m, d, y] = mdyShort.map(Number);
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      return isoDate(new Date(2000 + y, m - 1, d));
+  // "X days/weeks from now"
+  if (!dateIso) {
+    const m = s.match(/^(\d+)\s+(day|days|week|weeks)\s+from\s+now$/);
+    if (m) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + (m[2].startsWith('week') ? +m[1] * 7 : +m[1]));
+      dateIso = isoDate(d);
     }
   }
 
-  // Try native date parse as the final fallback.
-  // Handles: "Jan 15", "May 28 2026", "2026-06-01",
-  //          "05/28/2026", "05-28-2026", "5-28-26", etc.
-  const parsed = new Date(input);
-  if (!isNaN(parsed)) return isoDate(parsed);
-  return null;
+  // Named month: "Jun 15", "June 15", "Jun 15 2026", "June 15, 2026"
+  if (!dateIso) {
+    const MONTHS_LIST = ['january','february','march','april','may','june',
+                         'july','august','september','october','november','december'];
+    const m = s.match(/^([a-z]+)\s+(\d{1,2})(?:,?\s+(\d{4}))?$/);
+    if (m && m[1].length >= 3) {
+      const mi = MONTHS_LIST.findIndex(mo => mo.startsWith(m[1]));
+      if (mi !== -1) {
+        const day = +m[2];
+        if (day >= 1 && day <= 31) {
+          if (m[3]) {
+            dateIso = isoDate(new Date(+m[3], mi, day));
+          } else {
+            const c = new Date(today.getFullYear(), mi, day);
+            if (c < today) c.setFullYear(today.getFullYear() + 1);
+            dateIso = isoDate(c);
+          }
+        }
+      }
+    }
+  }
+
+  // American MM/DD or M/D (no year)
+  if (!dateIso) {
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})$/);
+    if (m) {
+      const [, mo, d] = m.map(Number);
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+        const c = new Date(today.getFullYear(), mo - 1, d);
+        if (c < today) c.setFullYear(today.getFullYear() + 1);
+        dateIso = isoDate(c);
+      }
+    }
+  }
+
+  // American MM/DD/YY (2-digit year)
+  if (!dateIso) {
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+    if (m) {
+      const [, mo, d, y] = m.map(Number);
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31)
+        dateIso = isoDate(new Date(2000 + y, mo - 1, d));
+    }
+  }
+
+  // Native Date fallback (handles full MM/DD/YYYY, MM-DD-YYYY, 2026-06-01, etc.)
+  if (!dateIso) {
+    const parsed = new Date(datePart);
+    if (!isNaN(parsed)) dateIso = isoDate(parsed);
+  }
+
+  if (!dateIso) return null;
+
+  // Append time if a suffix was found
+  if (timeSuffix) {
+    const t = parseTime(timeSuffix);
+    if (t) return `${dateIso}T${t}`;
+  }
+  return dateIso;
 }
 
 function isoDate(d) { return d.toISOString().slice(0, 10); }
@@ -187,12 +222,13 @@ class DatePicker {
     });
   }
 
-  /** Parse the current input value → Date or null */
+  /** Parse the current input value → Date (date part only, for calendar highlight) */
   _selectedDate() {
     const val = this.input.value.trim();
     if (!val) return null;
-    const iso = parseNaturalDate(val) || val;
-    const d   = new Date(iso.length === 10 ? iso + 'T00:00:00' : iso);
+    const full     = parseNaturalDate(val) || val;
+    const dateOnly = full.slice(0, 10);
+    const d = new Date(dateOnly + 'T00:00:00');
     return isNaN(d) ? null : d;
   }
 
@@ -266,6 +302,10 @@ class DatePicker {
       return `<button type="button" class="${cls}" data-date="${iso}">${d.getDate()}</button>`;
     }).join('');
 
+    // Pre-fill time input if existing value already has a time
+    const currentFull = parseNaturalDate(this.input.value.trim()) || this.input.value.trim();
+    const currentTime = currentFull.length > 10 ? currentFull.slice(11, 16) : '';
+
     this.popup.innerHTML = `
       <div class="dp-header">
         <button type="button" class="dp-nav dp-prev">&#x2039;</button>
@@ -277,8 +317,13 @@ class DatePicker {
         <span>Th</span><span>Fr</span><span>Sa</span>
       </div>
       <div class="dp-days">${dayHtml}</div>
+      <div class="dp-time-row">
+        <span class="dp-time-label">Time</span>
+        <input type="time" class="dp-time-input" value="${currentTime}">
+        <button type="button" class="dp-time-clear" title="Clear time">&#x2715;</button>
+      </div>
       <div class="dp-footer">
-        <button type="button" class="dp-btn-clear">Clear</button>
+        <button type="button" class="dp-btn-clear">Clear date &amp; time</button>
         <button type="button" class="dp-btn-today">Today</button>
       </div>`;
 
@@ -298,6 +343,10 @@ class DatePicker {
         this._pick(btn.dataset.date);
       });
     });
+    this.popup.querySelector('.dp-time-clear').addEventListener('click', e => {
+      e.stopPropagation();
+      this.popup.querySelector('.dp-time-input').value = '';
+    });
     this.popup.querySelector('.dp-btn-clear').addEventListener('click', e => {
       e.stopPropagation();
       this._pick('');
@@ -309,10 +358,15 @@ class DatePicker {
   }
 
   _pick(iso) {
-    this.input.value = iso;
-    // Fire 'input' so dirty-tracking picks up the change
+    if (!iso) {
+      // Clear everything
+      this.input.value = '';
+    } else {
+      const timeVal = this.popup?.querySelector('.dp-time-input')?.value || '';
+      this.input.value = timeVal ? `${iso}T${timeVal}` : iso;
+    }
     this.input.dispatchEvent(new Event('input', { bubbles: true }));
-    if (this.onChange) this.onChange(iso);
+    if (this.onChange) this.onChange(this.input.value);
     this.close();
   }
 }
@@ -332,6 +386,7 @@ async function loadSections(projectId) {
 async function loadTasks() {
   const p = new URLSearchParams();
   p.set('status', state.statusFilter);
+  p.set('sort', state.sortMode);
   if (state.priorityFilter) p.set('priority', state.priorityFilter);
   if (state.searchFilter)   p.set('search', state.searchFilter);
 
@@ -579,11 +634,9 @@ function renderProjectView(container) {
     html += renderSectionBlock(sec, secTasks);
   });
 
-  // "Add section" at the bottom
-  const projId = state.activeView === 'project' ? state.activeProjectId
-    : state.projects.find(p => p.is_inbox)?.id;
-  if (projId) {
-    html += `<button class="add-section-trigger js-add-section" data-project-id="${projId}">
+  // "Add section" only in real projects — Inbox stays flat
+  if (state.activeView === 'project' && state.activeProjectId) {
+    html += `<button class="add-section-trigger js-add-section" data-project-id="${state.activeProjectId}">
       <span class="plus">+</span> Add section
     </button>`;
   }
@@ -895,8 +948,11 @@ async function openDetail(taskId) {
     el.classList.toggle('active-detail', +el.dataset.id === taskId)
   );
 
-  // Load subtasks
-  await loadSubtasks(taskId);
+  // Load sections for this task's project and subtasks in parallel
+  await Promise.all([
+    loadDetailSections(task.project_id, task.section_id),
+    loadSubtasks(taskId),
+  ]);
   renderDetailSubtasks();
 }
 
@@ -907,6 +963,24 @@ function syncDetailPanel(task) {
   qs('#detail-due').value        = task.due_date || '';
   qs('#detail-tags').value       = task.tags.join(', ');
   qs('#detail-notes').value      = task.notes;
+
+  // Populate project dropdown
+  const projSelect = qs('#detail-project');
+  projSelect.innerHTML = state.projects.map(p =>
+    `<option value="${p.id}"${p.id === task.project_id ? ' selected' : ''}>${esc(p.name)}</option>`
+  ).join('');
+}
+
+async function loadDetailSections(projectId, selectedSectionId = null) {
+  const sections = projectId
+    ? await api('GET', `api/projects/${projectId}/sections`)
+    : [];
+  const secSelect = qs('#detail-section');
+  secSelect.innerHTML = '<option value="">No section</option>' +
+    sections.map(s =>
+      `<option value="${s.id}"${s.id === selectedSectionId ? ' selected' : ''}>${esc(s.name)}</option>`
+    ).join('');
+  qs('#detail-section-field').classList.toggle('hidden', sections.length === 0);
 }
 
 function renderDetailSubtasks() {
@@ -951,8 +1025,11 @@ function closeDetail() {
 
 async function saveDetail() {
   if (!state.activeTaskId) return;
-  const dueRaw = qs('#detail-due').value.trim();
-  const due    = parseNaturalDate(dueRaw) || (dueRaw || null);
+  const dueRaw      = qs('#detail-due').value.trim();
+  const due         = parseNaturalDate(dueRaw) || (dueRaw || null);
+  const newProjectId  = +qs('#detail-project').value;
+  const sectionVal    = qs('#detail-section').value;
+  const newSectionId  = sectionVal ? +sectionVal : null;
 
   await updateTask(state.activeTaskId, {
     title:      qs('#detail-title').value.trim() || 'Untitled',
@@ -961,9 +1038,57 @@ async function saveDetail() {
     due_date:   due,
     tags:       qs('#detail-tags').value.split(',').map(t => t.trim()).filter(Boolean),
     notes:      qs('#detail-notes').value,
+    project_id: newProjectId,
+    section_id: newSectionId,
   });
   state.detailDirty = false;
   toast('Saved');
+
+  // If moved away from the currently viewed project, close the detail panel
+  if (state.activeView === 'project' && state.activeProjectId !== newProjectId) {
+    closeDetail();
+  }
+}
+
+// ── Quick-add modal ────────────────────────────────────────
+function openQuickAdd() {
+  // Populate project dropdown, defaulting to the current view's project
+  const projSelect = qs('#quick-add-project');
+  projSelect.innerHTML = state.projects.map(p =>
+    `<option value="${p.id}">${esc(p.name)}</option>`
+  ).join('');
+  const defaultId = state.activeView === 'project'
+    ? state.activeProjectId
+    : state.projects.find(p => p.is_inbox)?.id;
+  if (defaultId) projSelect.value = defaultId;
+
+  qs('#quick-add-title').value    = '';
+  qs('#quick-add-priority').value = 'normal';
+  qs('#quick-add-due').value      = '';
+
+  qs('#quick-add-modal').classList.remove('hidden');
+  qs('#quick-add-title').focus();
+}
+
+function closeQuickAdd() {
+  qs('#quick-add-modal').classList.add('hidden');
+}
+
+async function saveQuickAdd() {
+  const title = qs('#quick-add-title').value.trim();
+  if (!title) { qs('#quick-add-title').focus(); return; }
+
+  const dueRaw = qs('#quick-add-due').value.trim();
+  const due    = parseNaturalDate(dueRaw) || (dueRaw || null);
+
+  closeQuickAdd();
+  await createTask({
+    title,
+    priority:   qs('#quick-add-priority').value,
+    due_date:   due,
+    project_id: +qs('#quick-add-project').value || null,
+  });
+  toast('Task added');
 }
 
 // ── Project modal ──────────────────────────────────────────
@@ -1160,13 +1285,18 @@ function priorityFlag(p) {
 
 function dueBadge(dateStr) {
   if (!dateStr) return '';
-  const due   = new Date(dateStr + 'T00:00:00');
+  const datePart = dateStr.slice(0, 10);
+  const timePart = dateStr.length > 10 ? dateStr.slice(11, 16) : null; // "HH:MM"
+  const due   = new Date(datePart + 'T00:00:00');
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const diff  = Math.round((due - today) / 86400000);
-  const label = diff < 0  ? dateStr
+  let label   = diff < 0  ? datePart
               : diff === 0 ? 'Today'
               : diff === 1 ? 'Tomorrow'
-              : dateStr;
+              : datePart;
+  if (timePart) {
+    label += ` ${timePart}`;
+  }
   const cls   = diff < 0  ? 'overdue'
               : diff === 0 ? 'today'
               : diff <= 3  ? 'soon'
@@ -1233,6 +1363,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadTasks();
   });
 
+  qs('#sort-mode').addEventListener('change', e => {
+    state.sortMode = e.target.value;
+    loadTasks();
+  });
+
   qs('#task-search').addEventListener('input', debounce(e => {
     state.searchFilter = e.target.value;
     loadTasks();
@@ -1261,9 +1396,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     toast('Task deleted');
   });
 
-  ['#detail-title','#detail-priority','#detail-recurrence','#detail-due','#detail-tags','#detail-notes'].forEach(sel => {
+  ['#detail-title','#detail-priority','#detail-recurrence','#detail-due','#detail-tags','#detail-notes','#detail-project','#detail-section'].forEach(sel => {
     qs(sel).addEventListener('input', () => { state.detailDirty = true; });
     qs(sel).addEventListener('change', () => { state.detailDirty = true; });
+  });
+
+  // When the project changes, reload sections for that project
+  qs('#detail-project').addEventListener('change', async () => {
+    const newProjectId = +qs('#detail-project').value;
+    await loadDetailSections(newProjectId, null);
   });
 
   // ── Date picker for detail panel ───────────────────────
@@ -1283,6 +1424,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // ── Project modal ──────────────────────────────────────
+  // ── Quick-add modal ────────────────────────────────────────
+  qs('#quick-add-modal').addEventListener('click', e => {
+    if (e.target === qs('#quick-add-modal')) closeQuickAdd();
+  });
+  qs('#quick-add-save-btn').addEventListener('click', saveQuickAdd);
+  qs('#quick-add-title').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveQuickAdd(); }
+  });
+  new DatePicker({
+    input:   qs('#quick-add-due'),
+    trigger: qs('#quick-add-due-trigger'),
+  });
+
   qs('#close-project-modal-btn').addEventListener('click', closeProjectModal);
   qs('#project-modal').addEventListener('click', e => {
     if (e.target === qs('#project-modal')) closeProjectModal();
@@ -1366,6 +1520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ── Keyboard shortcuts ─────────────────────────────────
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (!qs('#quick-add-modal').classList.contains('hidden')) { closeQuickAdd(); return; }
       if (!qs('#project-modal').classList.contains('hidden')) { closeProjectModal(); return; }
       if (!qs('#section-modal').classList.contains('hidden')) { closeSectionModal(); return; }
       if (state.openFormSectionId !== null) { state.openFormSectionId = null; renderView(); return; }
@@ -1375,6 +1530,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.preventDefault();
       if (state.activeTab === 'notes') saveNote();
       else if (state.activeTaskId) saveDetail();
+    }
+    // 'q' opens quick-add when no text field is focused
+    if (e.key === 'q' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tag = document.activeElement?.tagName;
+      const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+        || document.activeElement?.isContentEditable;
+      if (!isEditable) {
+        e.preventDefault();
+        openQuickAdd();
+      }
     }
   });
 
