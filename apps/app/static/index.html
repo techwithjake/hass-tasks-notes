@@ -3,70 +3,148 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Apps</title>
+  <title>Tasks & Notes</title>
   <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
 <div id="app">
-  <header>
-    <h1>Apps</h1>
-    <nav>
-      <button class="tab-btn active" data-tab="tasks">Tasks</button>
-      <button class="tab-btn" data-tab="notes">Notes</button>
+
+  <!-- ── Sidebar ───────────────────────────────────────── -->
+  <aside id="sidebar">
+    <div class="sidebar-top">
+      <input type="search" id="global-search" placeholder="Search…" autocomplete="off">
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item" data-view="inbox">
+        <span class="nav-icon">&#x1F4E5;</span>
+        <span class="nav-label">Inbox</span>
+        <span class="nav-badge" id="inbox-badge"></span>
+      </button>
+      <button class="nav-item" data-view="today">
+        <span class="nav-icon">&#x1F4C5;</span>
+        <span class="nav-label">Today</span>
+        <span class="nav-badge" id="today-badge"></span>
+      </button>
+      <button class="nav-item" data-view="upcoming">
+        <span class="nav-icon">&#x1F4C6;</span>
+        <span class="nav-label">Upcoming</span>
+      </button>
+      <button class="nav-item" data-view="all">
+        <span class="nav-icon">&#x2713;</span>
+        <span class="nav-label">All Tasks</span>
+      </button>
     </nav>
-  </header>
 
-  <main>
-    <!-- ── Tasks Panel ─────────────────────────────────────── -->
-    <section id="tasks-panel" class="panel active">
-      <div class="panel-toolbar">
-        <div class="filter-group">
-          <button class="filter-btn active" data-filter="all">All</button>
-          <button class="filter-btn" data-filter="active">Active</button>
-          <button class="filter-btn" data-filter="completed">Done</button>
+    <div class="sidebar-section-label">
+      <span>Projects</span>
+      <button id="add-project-btn" class="sidebar-icon-btn" title="Add project">+</button>
+    </div>
+    <div id="project-nav-list"></div>
+
+    <div class="sidebar-bottom">
+      <button class="nav-item" id="notes-nav-btn">
+        <span class="nav-icon">&#x1F4DD;</span>
+        <span class="nav-label">Notes</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ── Workspace ─────────────────────────────────────── -->
+  <div id="workspace">
+
+    <!-- Tasks Workspace -->
+    <div id="tasks-workspace" class="workspace active">
+      <div id="task-main">
+
+        <div id="view-header">
+          <div class="view-title-row">
+            <span class="view-color-dot" id="view-color-dot"></span>
+            <h2 id="view-title">Inbox</h2>
+            <div class="view-header-actions" id="view-header-actions"></div>
+          </div>
+          <div class="view-toolbar">
+            <div class="filter-group">
+              <button class="filter-btn active" data-filter="active">Active</button>
+              <button class="filter-btn" data-filter="all">All</button>
+              <button class="filter-btn" data-filter="completed">Done</button>
+            </div>
+            <select id="priority-filter">
+              <option value="">All priorities</option>
+              <option value="high">High</option>
+              <option value="normal">Normal</option>
+              <option value="low">Low</option>
+            </select>
+            <input type="search" id="task-search" placeholder="Search tasks…">
+          </div>
         </div>
-        <select id="priority-filter">
-          <option value="">All priorities</option>
-          <option value="high">High</option>
-          <option value="normal">Normal</option>
-          <option value="low">Low</option>
-        </select>
-        <input type="search" id="task-search" placeholder="Search tasks…">
-        <button id="add-task-btn" class="btn-primary">+ Add Task</button>
+
+        <div id="sections-container"></div>
+
       </div>
 
-      <div id="task-form" class="task-form hidden">
-        <input type="text" id="new-task-title" placeholder="Task title" autocomplete="off">
-        <textarea id="new-task-notes" placeholder="Notes (optional)" rows="2"></textarea>
-        <div class="form-row">
-          <input type="date" id="new-task-due">
-          <select id="new-task-priority">
-            <option value="low">Low priority</option>
-            <option value="normal" selected>Normal priority</option>
-            <option value="high">High priority</option>
-          </select>
-          <input type="text" id="new-task-tags" placeholder="Tags (comma-separated)">
+      <!-- Task Detail Panel -->
+      <div id="task-detail" class="detail-panel hidden">
+        <div class="detail-header">
+          <button id="close-detail-btn" class="btn-icon" title="Close">&times;</button>
         </div>
-        <div class="form-actions">
-          <button id="cancel-task-btn" class="btn-ghost">Cancel</button>
-          <button id="save-task-btn" class="btn-primary">Save Task</button>
+        <div class="detail-body">
+          <div class="detail-top-row">
+            <select id="detail-priority">
+              <option value="low">&#x25BC; Low</option>
+              <option value="normal">&#x25BC; Normal</option>
+              <option value="high">&#x25B2; High</option>
+            </select>
+            <select id="detail-recurrence">
+              <option value="">No repeat</option>
+              <option value="daily">Daily</option>
+              <option value="weekdays">Weekdays</option>
+              <option value="weekends">Weekends</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+          <input type="text" id="detail-title" class="detail-title-input" placeholder="Task title">
+          <div class="detail-fields">
+            <div class="detail-field">
+              <label>Due</label>
+              <input type="text" id="detail-due" placeholder="e.g. tomorrow, next monday" autocomplete="off">
+              <button type="button" class="dp-trigger" id="detail-due-trigger" title="Pick a date">&#128197;</button>
+            </div>
+            <div class="detail-field">
+              <label>Tags</label>
+              <input type="text" id="detail-tags" placeholder="comma-separated">
+            </div>
+          </div>
+          <textarea id="detail-notes" placeholder="Add notes (Markdown supported)…" rows="6"></textarea>
+
+          <div class="detail-sub-header">
+            <span>Subtasks</span>
+            <span id="detail-subtask-count" class="subtask-progress"></span>
+          </div>
+          <div id="detail-subtasks"></div>
+          <div class="detail-add-subtask">
+            <input type="text" id="new-subtask-input" placeholder="Add a subtask…" autocomplete="off">
+          </div>
+        </div>
+        <div class="detail-footer">
+          <button id="detail-delete-btn" class="btn-danger">Delete</button>
+          <button id="detail-save-btn" class="btn-primary">Save</button>
         </div>
       </div>
+    </div>
 
-      <div id="task-list" class="task-list"></div>
-    </section>
-
-    <!-- ── Notes Panel ─────────────────────────────────────── -->
-    <section id="notes-panel" class="panel">
+    <!-- Notes Workspace -->
+    <div id="notes-workspace" class="workspace">
       <div class="notes-layout">
         <aside class="notes-sidebar">
-          <div class="panel-toolbar notes-toolbar">
+          <div class="notes-toolbar">
             <input type="search" id="note-search" placeholder="Search notes…">
-            <button id="new-note-btn" class="btn-primary">+ New Note</button>
+            <button id="new-note-btn" class="btn-primary">+ New</button>
           </div>
           <div id="note-list" class="note-list"></div>
         </aside>
-
         <div class="note-editor">
           <div id="note-placeholder" class="editor-placeholder">
             Select a note or create a new one
@@ -86,33 +164,42 @@
           </div>
         </div>
       </div>
-    </section>
-  </main>
-</div>
+    </div>
 
-<!-- ── Task Edit Modal ───────────────────────────────────── -->
-<div id="task-modal" class="modal hidden" role="dialog" aria-modal="true">
-  <div class="modal-content">
+  </div><!-- /workspace -->
+</div><!-- /app -->
+
+<!-- Project Modal -->
+<div id="project-modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-content modal-sm">
     <div class="modal-header">
-      <h2>Edit Task</h2>
-      <button class="modal-close" aria-label="Close">&times;</button>
+      <h2 id="project-modal-title">New Project</h2>
+      <button class="modal-close" id="close-project-modal-btn" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
-      <input type="text" id="edit-task-title" placeholder="Task title">
-      <textarea id="edit-task-notes" placeholder="Notes" rows="3"></textarea>
-      <div class="form-row">
-        <input type="date" id="edit-task-due">
-        <select id="edit-task-priority">
-          <option value="low">Low priority</option>
-          <option value="normal">Normal priority</option>
-          <option value="high">High priority</option>
-        </select>
-        <input type="text" id="edit-task-tags" placeholder="Tags (comma-separated)">
-      </div>
+      <input type="text" id="project-name-input" placeholder="Project name" autocomplete="off">
+      <div class="color-picker" id="project-color-picker"></div>
     </div>
     <div class="modal-footer">
-      <button id="delete-task-btn" class="btn-danger">Delete</button>
-      <button id="update-task-btn" class="btn-primary">Save Changes</button>
+      <button id="delete-project-btn" class="btn-danger hidden">Delete Project</button>
+      <button id="save-project-btn" class="btn-primary">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Section rename modal -->
+<div id="section-modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-content modal-sm">
+    <div class="modal-header">
+      <h2>Rename Section</h2>
+      <button class="modal-close" id="close-section-modal-btn" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="section-name-input" placeholder="Section name" autocomplete="off">
+    </div>
+    <div class="modal-footer">
+      <button id="delete-section-btn" class="btn-danger">Delete Section</button>
+      <button id="save-section-btn" class="btn-primary">Save</button>
     </div>
   </div>
 </div>

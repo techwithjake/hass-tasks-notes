@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tasks-notes",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd /home/techwithjake/Documents/GitHub/hass-tasks-notes/apps/app && APPS_DB_PATH=/tmp/tasks-notes-dev.db python3 -m uvicorn main:app --host 0.0.0.0 --port 8099 --reload"],
+      "port": 8099
+    }
+  ]
+}
