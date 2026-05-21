@@ -46,33 +46,37 @@ def _row_to_dict(row) -> dict:
 
 
 def _next_due_date(current_due: Optional[str], recurrence: str) -> Optional[str]:
-    base = date.fromisoformat(current_due) if current_due else date.today()
+    # Strip any time component for date arithmetic, reattach it afterward
+    date_str = current_due[:10] if current_due else None
+    time_str = current_due[10:] if current_due and len(current_due) > 10 else ""
+    base = date.fromisoformat(date_str) if date_str else date.today()
+
+    next_d: Optional[date] = None
     if recurrence == "daily":
-        return (base + timedelta(days=1)).isoformat()
-    if recurrence == "weekdays":
-        d = base + timedelta(days=1)
-        while d.weekday() >= 5:
-            d += timedelta(days=1)
-        return d.isoformat()
-    if recurrence == "weekends":
-        d = base + timedelta(days=1)
-        while d.weekday() < 5:
-            d += timedelta(days=1)
-        return d.isoformat()
-    if recurrence == "weekly":
-        return (base + timedelta(weeks=1)).isoformat()
-    if recurrence == "monthly":
+        next_d = base + timedelta(days=1)
+    elif recurrence == "weekdays":
+        next_d = base + timedelta(days=1)
+        while next_d.weekday() >= 5:
+            next_d += timedelta(days=1)
+    elif recurrence == "weekends":
+        next_d = base + timedelta(days=1)
+        while next_d.weekday() < 5:
+            next_d += timedelta(days=1)
+    elif recurrence == "weekly":
+        next_d = base + timedelta(weeks=1)
+    elif recurrence == "monthly":
         month = base.month % 12 + 1
         year  = base.year + (1 if base.month == 12 else 0)
         day   = min(base.day, [31, 28 + int(year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)),
                                 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1])
-        return date(year, month, day).isoformat()
-    if recurrence == "yearly":
+        next_d = date(year, month, day)
+    elif recurrence == "yearly":
         try:
-            return date(base.year + 1, base.month, base.day).isoformat()
+            next_d = date(base.year + 1, base.month, base.day)
         except ValueError:
-            return date(base.year + 1, base.month, 28).isoformat()
-    return None
+            next_d = date(base.year + 1, base.month, 28)
+
+    return (next_d.isoformat() + time_str) if next_d else None
 
 
 # ── Models ────────────────────────────────────────────────
@@ -150,14 +154,14 @@ async def list_tasks(
             query  = f"{_BASE_SELECT} WHERE t.parent_id IS NULL"
             params = []
 
-        # View-based filters
+        # View-based filters — use SQLite date() to strip any stored time component
         today_str = date.today().isoformat()
         if view == "today":
-            query += " AND t.due_date IS NOT NULL AND t.due_date <= ?"
+            query += " AND t.due_date IS NOT NULL AND date(t.due_date) <= ?"
             params.append(today_str)
         elif view == "upcoming":
             upcoming = (date.today() + timedelta(days=7)).isoformat()
-            query += " AND t.due_date IS NOT NULL AND t.due_date > ? AND t.due_date <= ?"
+            query += " AND t.due_date IS NOT NULL AND date(t.due_date) > ? AND date(t.due_date) <= ?"
             params += [today_str, upcoming]
         elif view == "all":
             pass  # no date filter

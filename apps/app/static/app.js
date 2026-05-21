@@ -65,109 +65,143 @@ async function api(method, path, body) {
   return res.json();
 }
 
-// ── Natural language date parser ───────────────────────────
+// ── Time parser ────────────────────────────────────────────
+// Returns "HH:MM" (24h) or null.  Accepts: 3pm, 3:30pm, 3:30 pm, 15:00, noon, midnight
+function parseTime(t) {
+  if (!t) return null;
+  const s = t.toLowerCase().trim();
+  if (s === 'noon')     return '12:00';
+  if (s === 'midnight') return '00:00';
+  const m = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!m) return null;
+  let h = parseInt(m[1]);
+  const min = parseInt(m[2] || '0');
+  const ampm = m[3];
+  if (ampm === 'pm' && h < 12) h += 12;
+  if (ampm === 'am' && h === 12) h = 0;
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+}
+
+// ── Natural language date/time parser ──────────────────────
+// Returns "YYYY-MM-DD" or "YYYY-MM-DDTHH:MM".
 function parseNaturalDate(input) {
   if (!input || !input.trim()) return null;
-  const s = input.trim().toLowerCase();
+  const raw = input.trim();
+
+  // Already a stored ISO datetime — pass through unchanged
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw)) return raw.slice(0, 16);
+
+  // Split optional time suffix: "tomorrow at 3pm", "5/28 @ 14:00"
+  let datePart = raw, timeSuffix = null;
+  const atSplit = raw.match(/^(.+?)\s+(?:at|@)\s+(.+)$/i);
+  if (atSplit) { datePart = atSplit[1].trim(); timeSuffix = atSplit[2].trim(); }
+
+  const s     = datePart.toLowerCase();
   const today = new Date(); today.setHours(0, 0, 0, 0);
+  let dateIso = null;
 
-  if (s === 'today')     return isoDate(today);
-  if (s === 'tomorrow')  { const d = new Date(today); d.setDate(d.getDate() + 1); return isoDate(d); }
-  if (s === 'yesterday') { const d = new Date(today); d.setDate(d.getDate() - 1); return isoDate(d); }
+  // Named shortcuts
+  if      (s === 'today')     dateIso = isoDate(today);
+  else if (s === 'tomorrow')  { const d = new Date(today); d.setDate(d.getDate() + 1); dateIso = isoDate(d); }
+  else if (s === 'yesterday') { const d = new Date(today); d.setDate(d.getDate() - 1); dateIso = isoDate(d); }
 
-  const DAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-
-  const nextMatch = s.match(/^next\s+(\w+)$/);
-  if (nextMatch) {
-    const di = DAYS.indexOf(nextMatch[1]);
-    if (di !== -1) {
-      const d = new Date(today);
-      let diff = di - d.getDay();
-      if (diff <= 0) diff += 7;
-      d.setDate(d.getDate() + diff);
-      return isoDate(d);
-    }
-  }
-
-  const thisMatch = s.match(/^this\s+(\w+)$/);
-  if (thisMatch) {
-    const di = DAYS.indexOf(thisMatch[1]);
-    if (di !== -1) {
-      const d = new Date(today);
-      let diff = di - d.getDay();
-      if (diff <= 0) diff += 7;
-      d.setDate(d.getDate() + diff);
-      return isoDate(d);
-    }
-  }
-
-  // "in X days/weeks"
-  const inMatch = s.match(/^in\s+(\d+)\s+(day|days|week|weeks)$/);
-  if (inMatch) {
-    const n = parseInt(inMatch[1]);
-    const d = new Date(today);
-    d.setDate(d.getDate() + (inMatch[2].startsWith('week') ? n * 7 : n));
-    return isoDate(d);
-  }
-
-  // "X days from now"
-  const fromNow = s.match(/^(\d+)\s+(day|days|week|weeks)\s+from\s+now$/);
-  if (fromNow) {
-    const n = parseInt(fromNow[1]);
-    const d = new Date(today);
-    d.setDate(d.getDate() + (fromNow[2].startsWith('week') ? n * 7 : n));
-    return isoDate(d);
-  }
-
-  // ── Named month: "Jun 15", "June 15", "Jun 15 2026", "June 15, 2026" ──
-  // Native Date.parse() assigns an unpredictable year for "Mon DD" strings,
-  // so handle these explicitly before falling through to the native parser.
-  const MONTHS_LIST = ['january','february','march','april','may','june',
-                       'july','august','september','october','november','december'];
-  const namedMonth = s.match(/^([a-z]+)\s+(\d{1,2})(?:,?\s+(\d{4}))?$/);
-  if (namedMonth && namedMonth[1].length >= 3) {
-    const mi = MONTHS_LIST.findIndex(m => m.startsWith(namedMonth[1]));
-    if (mi !== -1) {
-      const day = parseInt(namedMonth[2]);
-      if (day >= 1 && day <= 31) {
-        if (namedMonth[3]) {
-          return isoDate(new Date(parseInt(namedMonth[3]), mi, day));
+  // next/this <weekday>
+  if (!dateIso) {
+    const DAYS = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    for (const [pat, offset] of [[/^next\s+(\w+)$/, 0], [/^this\s+(\w+)$/, 0]]) {
+      const m = s.match(pat);
+      if (m) {
+        const di = DAYS.indexOf(m[1]);
+        if (di !== -1) {
+          const d = new Date(today);
+          let diff = di - d.getDay(); if (diff <= 0) diff += 7;
+          d.setDate(d.getDate() + diff);
+          dateIso = isoDate(d); break;
         }
-        const candidate = new Date(today.getFullYear(), mi, day);
-        if (candidate < today) candidate.setFullYear(today.getFullYear() + 1);
-        return isoDate(candidate);
       }
     }
   }
 
-  // ── American date formats ─────────────────────────────────
-  // MM/DD or M/D  (no year → next occurrence of that month/day)
-  const mdOnly = s.match(/^(\d{1,2})\/(\d{1,2})$/);
-  if (mdOnly) {
-    const [, m, d] = mdOnly.map(Number);
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      const candidate = new Date(today.getFullYear(), m - 1, d);
-      // If the date has already passed this year, roll to next year
-      if (candidate < today) candidate.setFullYear(today.getFullYear() + 1);
-      return isoDate(candidate);
+  // "in X days/weeks"
+  if (!dateIso) {
+    const m = s.match(/^in\s+(\d+)\s+(day|days|week|weeks)$/);
+    if (m) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + (m[2].startsWith('week') ? +m[1] * 7 : +m[1]));
+      dateIso = isoDate(d);
     }
   }
 
-  // MM/DD/YY or M/D/YY  (2-digit year — native parser sometimes misreads these)
-  const mdyShort = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
-  if (mdyShort) {
-    const [, m, d, y] = mdyShort.map(Number);
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      return isoDate(new Date(2000 + y, m - 1, d));
+  // "X days/weeks from now"
+  if (!dateIso) {
+    const m = s.match(/^(\d+)\s+(day|days|week|weeks)\s+from\s+now$/);
+    if (m) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + (m[2].startsWith('week') ? +m[1] * 7 : +m[1]));
+      dateIso = isoDate(d);
     }
   }
 
-  // Try native date parse as the final fallback.
-  // Handles: "Jan 15", "May 28 2026", "2026-06-01",
-  //          "05/28/2026", "05-28-2026", "5-28-26", etc.
-  const parsed = new Date(input);
-  if (!isNaN(parsed)) return isoDate(parsed);
-  return null;
+  // Named month: "Jun 15", "June 15", "Jun 15 2026", "June 15, 2026"
+  if (!dateIso) {
+    const MONTHS_LIST = ['january','february','march','april','may','june',
+                         'july','august','september','october','november','december'];
+    const m = s.match(/^([a-z]+)\s+(\d{1,2})(?:,?\s+(\d{4}))?$/);
+    if (m && m[1].length >= 3) {
+      const mi = MONTHS_LIST.findIndex(mo => mo.startsWith(m[1]));
+      if (mi !== -1) {
+        const day = +m[2];
+        if (day >= 1 && day <= 31) {
+          if (m[3]) {
+            dateIso = isoDate(new Date(+m[3], mi, day));
+          } else {
+            const c = new Date(today.getFullYear(), mi, day);
+            if (c < today) c.setFullYear(today.getFullYear() + 1);
+            dateIso = isoDate(c);
+          }
+        }
+      }
+    }
+  }
+
+  // American MM/DD or M/D (no year)
+  if (!dateIso) {
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})$/);
+    if (m) {
+      const [, mo, d] = m.map(Number);
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+        const c = new Date(today.getFullYear(), mo - 1, d);
+        if (c < today) c.setFullYear(today.getFullYear() + 1);
+        dateIso = isoDate(c);
+      }
+    }
+  }
+
+  // American MM/DD/YY (2-digit year)
+  if (!dateIso) {
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+    if (m) {
+      const [, mo, d, y] = m.map(Number);
+      if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31)
+        dateIso = isoDate(new Date(2000 + y, mo - 1, d));
+    }
+  }
+
+  // Native Date fallback (handles full MM/DD/YYYY, MM-DD-YYYY, 2026-06-01, etc.)
+  if (!dateIso) {
+    const parsed = new Date(datePart);
+    if (!isNaN(parsed)) dateIso = isoDate(parsed);
+  }
+
+  if (!dateIso) return null;
+
+  // Append time if a suffix was found
+  if (timeSuffix) {
+    const t = parseTime(timeSuffix);
+    if (t) return `${dateIso}T${t}`;
+  }
+  return dateIso;
 }
 
 function isoDate(d) { return d.toISOString().slice(0, 10); }
@@ -187,12 +221,13 @@ class DatePicker {
     });
   }
 
-  /** Parse the current input value → Date or null */
+  /** Parse the current input value → Date (date part only, for calendar highlight) */
   _selectedDate() {
     const val = this.input.value.trim();
     if (!val) return null;
-    const iso = parseNaturalDate(val) || val;
-    const d   = new Date(iso.length === 10 ? iso + 'T00:00:00' : iso);
+    const full     = parseNaturalDate(val) || val;
+    const dateOnly = full.slice(0, 10);
+    const d = new Date(dateOnly + 'T00:00:00');
     return isNaN(d) ? null : d;
   }
 
@@ -266,6 +301,10 @@ class DatePicker {
       return `<button type="button" class="${cls}" data-date="${iso}">${d.getDate()}</button>`;
     }).join('');
 
+    // Pre-fill time input if existing value already has a time
+    const currentFull = parseNaturalDate(this.input.value.trim()) || this.input.value.trim();
+    const currentTime = currentFull.length > 10 ? currentFull.slice(11, 16) : '';
+
     this.popup.innerHTML = `
       <div class="dp-header">
         <button type="button" class="dp-nav dp-prev">&#x2039;</button>
@@ -277,8 +316,13 @@ class DatePicker {
         <span>Th</span><span>Fr</span><span>Sa</span>
       </div>
       <div class="dp-days">${dayHtml}</div>
+      <div class="dp-time-row">
+        <span class="dp-time-label">Time</span>
+        <input type="time" class="dp-time-input" value="${currentTime}">
+        <button type="button" class="dp-time-clear" title="Clear time">&#x2715;</button>
+      </div>
       <div class="dp-footer">
-        <button type="button" class="dp-btn-clear">Clear</button>
+        <button type="button" class="dp-btn-clear">Clear date &amp; time</button>
         <button type="button" class="dp-btn-today">Today</button>
       </div>`;
 
@@ -298,6 +342,10 @@ class DatePicker {
         this._pick(btn.dataset.date);
       });
     });
+    this.popup.querySelector('.dp-time-clear').addEventListener('click', e => {
+      e.stopPropagation();
+      this.popup.querySelector('.dp-time-input').value = '';
+    });
     this.popup.querySelector('.dp-btn-clear').addEventListener('click', e => {
       e.stopPropagation();
       this._pick('');
@@ -309,10 +357,15 @@ class DatePicker {
   }
 
   _pick(iso) {
-    this.input.value = iso;
-    // Fire 'input' so dirty-tracking picks up the change
+    if (!iso) {
+      // Clear everything
+      this.input.value = '';
+    } else {
+      const timeVal = this.popup?.querySelector('.dp-time-input')?.value || '';
+      this.input.value = timeVal ? `${iso}T${timeVal}` : iso;
+    }
     this.input.dispatchEvent(new Event('input', { bubbles: true }));
-    if (this.onChange) this.onChange(iso);
+    if (this.onChange) this.onChange(this.input.value);
     this.close();
   }
 }
@@ -1158,13 +1211,20 @@ function priorityFlag(p) {
 
 function dueBadge(dateStr) {
   if (!dateStr) return '';
-  const due   = new Date(dateStr + 'T00:00:00');
+  const datePart = dateStr.slice(0, 10);
+  const timePart = dateStr.length > 10 ? dateStr.slice(11, 16) : null; // "HH:MM"
+  const due   = new Date(datePart + 'T00:00:00');
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const diff  = Math.round((due - today) / 86400000);
-  const label = diff < 0  ? dateStr
+  let label   = diff < 0  ? datePart
               : diff === 0 ? 'Today'
               : diff === 1 ? 'Tomorrow'
-              : dateStr;
+              : datePart;
+  if (timePart) {
+    const [h, m] = timePart.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    label += ` ${h % 12 || 12}:${String(m).padStart(2,'0')} ${ampm}`;
+  }
   const cls   = diff < 0  ? 'overdue'
               : diff === 0 ? 'today'
               : diff <= 3  ? 'soon'
