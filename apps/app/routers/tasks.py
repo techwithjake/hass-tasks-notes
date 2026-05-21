@@ -133,6 +133,7 @@ async def list_tasks(
     tag:        str = Query(""),
     search:     str = Query(""),
     parent_id:  Optional[int] = Query(None),
+    sort:       str = Query("priority"),   # "priority" | "manual"
 ):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
@@ -186,11 +187,18 @@ async def list_tasks(
             query += " AND (',' || t.tags || ',' LIKE ?)"
             params.append(f"%,{tag},%")
 
-        # Sort
+        # Sort — use a CASE to get correct priority rank (high=0, normal=1, low=2)
+        _PRIORITY_RANK = "CASE t.priority WHEN 'high' THEN 0 WHEN 'normal' THEN 1 WHEN 'low' THEN 2 END"
         if view in ("today", "upcoming", "all"):
-            query += " ORDER BY t.completed ASC, t.due_date ASC, t.priority DESC, t.sort_order ASC"
+            if sort == "manual":
+                query += " ORDER BY t.completed ASC, t.due_date ASC, t.sort_order ASC"
+            else:
+                query += f" ORDER BY t.completed ASC, t.due_date ASC, {_PRIORITY_RANK} ASC, t.sort_order ASC"
         else:
-            query += " ORDER BY t.completed ASC, t.sort_order ASC, t.created_at DESC"
+            if sort == "manual":
+                query += " ORDER BY t.completed ASC, t.sort_order ASC, t.created_at DESC"
+            else:
+                query += f" ORDER BY t.completed ASC, {_PRIORITY_RANK} ASC, t.sort_order ASC, t.created_at DESC"
 
         async with db.execute(query, params) as c:
             return [_row_to_dict(r) for r in await c.fetchall()]

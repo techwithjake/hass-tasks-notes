@@ -21,6 +21,7 @@ const state = {
   statusFilter:   'active',
   priorityFilter: '',
   searchFilter:   '',
+  sortMode:       'priority',   // 'priority' | 'manual'
 
   // Inline form tracking
   openFormSectionId: null,  // null = "no section" (top of project)
@@ -385,6 +386,7 @@ async function loadSections(projectId) {
 async function loadTasks() {
   const p = new URLSearchParams();
   p.set('status', state.statusFilter);
+  p.set('sort', state.sortMode);
   if (state.priorityFilter) p.set('priority', state.priorityFilter);
   if (state.searchFilter)   p.set('search', state.searchFilter);
 
@@ -946,8 +948,11 @@ async function openDetail(taskId) {
     el.classList.toggle('active-detail', +el.dataset.id === taskId)
   );
 
-  // Load subtasks
-  await loadSubtasks(taskId);
+  // Load sections for this task's project and subtasks in parallel
+  await Promise.all([
+    loadDetailSections(task.project_id, task.section_id),
+    loadSubtasks(taskId),
+  ]);
   renderDetailSubtasks();
 }
 
@@ -958,6 +963,24 @@ function syncDetailPanel(task) {
   qs('#detail-due').value        = task.due_date || '';
   qs('#detail-tags').value       = task.tags.join(', ');
   qs('#detail-notes').value      = task.notes;
+
+  // Populate project dropdown
+  const projSelect = qs('#detail-project');
+  projSelect.innerHTML = state.projects.map(p =>
+    `<option value="${p.id}"${p.id === task.project_id ? ' selected' : ''}>${esc(p.name)}</option>`
+  ).join('');
+}
+
+async function loadDetailSections(projectId, selectedSectionId = null) {
+  const sections = projectId
+    ? await api('GET', `api/projects/${projectId}/sections`)
+    : [];
+  const secSelect = qs('#detail-section');
+  secSelect.innerHTML = '<option value="">No section</option>' +
+    sections.map(s =>
+      `<option value="${s.id}"${s.id === selectedSectionId ? ' selected' : ''}>${esc(s.name)}</option>`
+    ).join('');
+  qs('#detail-section-field').classList.toggle('hidden', sections.length === 0);
 }
 
 function renderDetailSubtasks() {
@@ -1002,8 +1025,11 @@ function closeDetail() {
 
 async function saveDetail() {
   if (!state.activeTaskId) return;
-  const dueRaw = qs('#detail-due').value.trim();
-  const due    = parseNaturalDate(dueRaw) || (dueRaw || null);
+  const dueRaw      = qs('#detail-due').value.trim();
+  const due         = parseNaturalDate(dueRaw) || (dueRaw || null);
+  const newProjectId  = +qs('#detail-project').value;
+  const sectionVal    = qs('#detail-section').value;
+  const newSectionId  = sectionVal ? +sectionVal : null;
 
   await updateTask(state.activeTaskId, {
     title:      qs('#detail-title').value.trim() || 'Untitled',
@@ -1012,9 +1038,57 @@ async function saveDetail() {
     due_date:   due,
     tags:       qs('#detail-tags').value.split(',').map(t => t.trim()).filter(Boolean),
     notes:      qs('#detail-notes').value,
+    project_id: newProjectId,
+    section_id: newSectionId,
   });
   state.detailDirty = false;
   toast('Saved');
+
+  // If moved away from the currently viewed project, close the detail panel
+  if (state.activeView === 'project' && state.activeProjectId !== newProjectId) {
+    closeDetail();
+  }
+}
+
+// ── Quick-add modal ────────────────────────────────────────
+function openQuickAdd() {
+  // Populate project dropdown, defaulting to the current view's project
+  const projSelect = qs('#quick-add-project');
+  projSelect.innerHTML = state.projects.map(p =>
+    `<option value="${p.id}">${esc(p.name)}</option>`
+  ).join('');
+  const defaultId = state.activeView === 'project'
+    ? state.activeProjectId
+    : state.projects.find(p => p.is_inbox)?.id;
+  if (defaultId) projSelect.value = defaultId;
+
+  qs('#quick-add-title').value    = '';
+  qs('#quick-add-priority').value = 'normal';
+  qs('#quick-add-due').value      = '';
+
+  qs('#quick-add-modal').classList.remove('hidden');
+  qs('#quick-add-title').focus();
+}
+
+function closeQuickAdd() {
+  qs('#quick-add-modal').classList.add('hidden');
+}
+
+async function saveQuickAdd() {
+  const title = qs('#quick-add-title').value.trim();
+  if (!title) { qs('#quick-add-title').focus(); return; }
+
+  const dueRaw = qs('#quick-add-due').value.trim();
+  const due    = parseNaturalDate(dueRaw) || (dueRaw || null);
+
+  closeQuickAdd();
+  await createTask({
+    title,
+    priority:   qs('#quick-add-priority').value,
+    due_date:   due,
+    project_id: +qs('#quick-add-project').value || null,
+  });
+  toast('Task added');
 }
 
 // ── Project modal ──────────────────────────────────────────
@@ -1289,6 +1363,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadTasks();
   });
 
+  qs('#sort-mode').addEventListener('change', e => {
+    state.sortMode = e.target.value;
+    loadTasks();
+  });
+
   qs('#task-search').addEventListener('input', debounce(e => {
     state.searchFilter = e.target.value;
     loadTasks();
@@ -1317,9 +1396,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     toast('Task deleted');
   });
 
-  ['#detail-title','#detail-priority','#detail-recurrence','#detail-due','#detail-tags','#detail-notes'].forEach(sel => {
+  ['#detail-title','#detail-priority','#detail-recurrence','#detail-due','#detail-tags','#detail-notes','#detail-project','#detail-section'].forEach(sel => {
     qs(sel).addEventListener('input', () => { state.detailDirty = true; });
     qs(sel).addEventListener('change', () => { state.detailDirty = true; });
+  });
+
+  // When the project changes, reload sections for that project
+  qs('#detail-project').addEventListener('change', async () => {
+    const newProjectId = +qs('#detail-project').value;
+    await loadDetailSections(newProjectId, null);
   });
 
   // ── Date picker for detail panel ───────────────────────
@@ -1339,6 +1424,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // ── Project modal ──────────────────────────────────────
+  // ── Quick-add modal ────────────────────────────────────────
+  qs('#quick-add-modal').addEventListener('click', e => {
+    if (e.target === qs('#quick-add-modal')) closeQuickAdd();
+  });
+  qs('#quick-add-save-btn').addEventListener('click', saveQuickAdd);
+  qs('#quick-add-title').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveQuickAdd(); }
+  });
+  new DatePicker({
+    input:   qs('#quick-add-due'),
+    trigger: qs('#quick-add-due-trigger'),
+  });
+
   qs('#close-project-modal-btn').addEventListener('click', closeProjectModal);
   qs('#project-modal').addEventListener('click', e => {
     if (e.target === qs('#project-modal')) closeProjectModal();
@@ -1422,6 +1520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ── Keyboard shortcuts ─────────────────────────────────
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (!qs('#quick-add-modal').classList.contains('hidden')) { closeQuickAdd(); return; }
       if (!qs('#project-modal').classList.contains('hidden')) { closeProjectModal(); return; }
       if (!qs('#section-modal').classList.contains('hidden')) { closeSectionModal(); return; }
       if (state.openFormSectionId !== null) { state.openFormSectionId = null; renderView(); return; }
@@ -1431,6 +1530,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       e.preventDefault();
       if (state.activeTab === 'notes') saveNote();
       else if (state.activeTaskId) saveDetail();
+    }
+    // 'q' opens quick-add when no text field is focused
+    if (e.key === 'q' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tag = document.activeElement?.tagName;
+      const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+        || document.activeElement?.isContentEditable;
+      if (!isEditable) {
+        e.preventDefault();
+        openQuickAdd();
+      }
     }
   });
 
