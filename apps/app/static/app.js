@@ -1221,9 +1221,7 @@ function dueBadge(dateStr) {
               : diff === 1 ? 'Tomorrow'
               : datePart;
   if (timePart) {
-    const [h, m] = timePart.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    label += ` ${h % 12 || 12}:${String(m).padStart(2,'0')} ${ampm}`;
+    label += ` ${timePart}`;
   }
   const cls   = diff < 0  ? 'overdue'
               : diff === 0 ? 'today'
