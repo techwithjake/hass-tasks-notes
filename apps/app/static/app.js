@@ -579,11 +579,9 @@ function renderProjectView(container) {
     html += renderSectionBlock(sec, secTasks);
   });
 
-  // "Add section" at the bottom
-  const projId = state.activeView === 'project' ? state.activeProjectId
-    : state.projects.find(p => p.is_inbox)?.id;
-  if (projId) {
-    html += `<button class="add-section-trigger js-add-section" data-project-id="${projId}">
+  // "Add section" only in real projects — Inbox stays flat
+  if (state.activeView === 'project' && state.activeProjectId) {
+    html += `<button class="add-section-trigger js-add-section" data-project-id="${state.activeProjectId}">
       <span class="plus">+</span> Add section
     </button>`;
   }
