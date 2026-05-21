@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apps</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Apps</h1>
+    <nav>
+      <button class="tab-btn active" data-tab="tasks">Tasks</button>
+      <button class="tab-btn" data-tab="notes">Notes</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ── Tasks Panel ─────────────────────────────────────── -->
+    <section id="tasks-panel" class="panel active">
+      <div class="panel-toolbar">
+        <div class="filter-group">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="active">Active</button>
+          <button class="filter-btn" data-filter="completed">Done</button>
+        </div>
+        <select id="priority-filter">
+          <option value="">All priorities</option>
+          <option value="high">High</option>
+          <option value="normal">Normal</option>
+          <option value="low">Low</option>
+        </select>
+        <input type="search" id="task-search" placeholder="Search tasks…">
+        <button id="add-task-btn" class="btn-primary">+ Add Task</button>
+      </div>
+
+      <div id="task-form" class="task-form hidden">
+        <input type="text" id="new-task-title" placeholder="Task title" autocomplete="off">
+        <textarea id="new-task-notes" placeholder="Notes (optional)" rows="2"></textarea>
+        <div class="form-row">
+          <input type="date" id="new-task-due">
+          <select id="new-task-priority">
+            <option value="low">Low priority</option>
+            <option value="normal" selected>Normal priority</option>
+            <option value="high">High priority</option>
+          </select>
+          <input type="text" id="new-task-tags" placeholder="Tags (comma-separated)">
+        </div>
+        <div class="form-actions">
+          <button id="cancel-task-btn" class="btn-ghost">Cancel</button>
+          <button id="save-task-btn" class="btn-primary">Save Task</button>
+        </div>
+      </div>
+
+      <div id="task-list" class="task-list"></div>
+    </section>
+
+    <!-- ── Notes Panel ─────────────────────────────────────── -->
+    <section id="notes-panel" class="panel">
+      <div class="notes-layout">
+        <aside class="notes-sidebar">
+          <div class="panel-toolbar notes-toolbar">
+            <input type="search" id="note-search" placeholder="Search notes…">
+            <button id="new-note-btn" class="btn-primary">+ New Note</button>
+          </div>
+          <div id="note-list" class="note-list"></div>
+        </aside>
+
+        <div class="note-editor">
+          <div id="note-placeholder" class="editor-placeholder">
+            Select a note or create a new one
+          </div>
+          <div id="note-editor-content" class="hidden">
+            <div class="editor-header">
+              <input type="text" id="note-title" placeholder="Note title">
+              <div class="editor-actions">
+                <button id="delete-note-btn" class="btn-danger">Delete</button>
+                <button id="save-note-btn" class="btn-primary">Save</button>
+              </div>
+            </div>
+            <div class="editor-tags-row">
+              <input type="text" id="note-tags" placeholder="Tags (comma-separated)">
+            </div>
+            <textarea id="note-content" placeholder="Write in Markdown…" spellcheck="true"></textarea>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ── Task Edit Modal ───────────────────────────────────── -->
+<div id="task-modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Edit Task</h2>
+      <button class="modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="edit-task-title" placeholder="Task title">
+      <textarea id="edit-task-notes" placeholder="Notes" rows="3"></textarea>
+      <div class="form-row">
+        <input type="date" id="edit-task-due">
+        <select id="edit-task-priority">
+          <option value="low">Low priority</option>
+          <option value="normal">Normal priority</option>
+          <option value="high">High priority</option>
+        </select>
+        <input type="text" id="edit-task-tags" placeholder="Tags (comma-separated)">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="delete-task-btn" class="btn-danger">Delete</button>
+      <button id="update-task-btn" class="btn-primary">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<script src="static/app.js"></script>
+</body>
+</html>
