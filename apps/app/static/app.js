@@ -540,6 +540,13 @@ async function switchView(view, projectId) {
   state.detailDirty     = false;
   state.openFormSectionId = null;
 
+  // Switch back to tasks workspace if currently on notes
+  if (state.activeTab !== 'tasks') {
+    state.activeTab = 'tasks';
+    document.getElementById('notes-workspace').classList.remove('active');
+    document.getElementById('tasks-workspace').classList.add('active');
+  }
+
   document.getElementById('task-detail').classList.add('hidden');
   document.querySelectorAll('.nav-item, .project-nav-item').forEach(el => el.classList.remove('active'));
 
