@@ -2,6 +2,7 @@ name: Apps
 description: Robust task manager and note taker for Home Assistant
 version: 0.1.0
 slug: apps
+image: "ghcr.io/techwithjake/hass-tasks-notes/{arch}-addon-apps"
 init: false
 arch:
   - aarch64
