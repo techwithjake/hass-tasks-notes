@@ -1226,18 +1226,18 @@ select { cursor: pointer; }
 .editor-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
 
 .btn-mode {
-  padding: 3px 10px;
-  font-size: 12px;
+  padding: 6px 14px;
+  font-size: 13px;
   font-family: inherit;
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border-focus);
   border-radius: var(--r);
-  background: var(--bg-subtle);
-  color: var(--text-muted);
+  background: transparent;
+  color: var(--text);
   cursor: pointer;
   transition: all 0.1s;
   font-weight: 500;
 }
-.btn-mode:hover { background: var(--surface); color: var(--text); border-color: var(--border-focus); }
+.btn-mode:hover { background: var(--bg-subtle); border-color: var(--text-muted); }
 .btn-mode.active { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
 
 .editor-tags-row {
