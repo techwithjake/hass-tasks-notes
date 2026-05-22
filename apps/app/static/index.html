@@ -63,6 +63,7 @@
 
         <div id="view-header">
           <div class="view-title-row">
+            <button id="mobile-sidebar-btn" class="mobile-menu-btn" aria-label="Open navigation">&#9776;</button>
             <span class="view-color-dot" id="view-color-dot"></span>
             <h2 id="view-title">Inbox</h2>
             <div class="view-header-actions" id="view-header-actions"></div>
@@ -156,6 +157,7 @@
       <div class="notes-layout">
         <aside class="notes-sidebar">
           <div class="notes-toolbar">
+            <button id="mobile-notes-sidebar-btn" class="mobile-menu-btn" aria-label="Open navigation">&#9776;</button>
             <input type="search" id="note-search" placeholder="Search notes…">
             <button id="new-note-btn" class="btn-primary">+ New</button>
           </div>
@@ -169,6 +171,7 @@
           </div>
           <div id="note-editor-content" class="hidden">
             <div class="editor-header">
+              <button id="notes-back-btn" class="notes-back-btn" aria-label="Back to notes list">&#8592; Back</button>
               <input type="text" id="note-title" placeholder="Note title">
               <select id="note-folder-select" class="note-folder-select"></select>
               <div class="editor-actions">
@@ -251,6 +254,7 @@
   </div>
 </div>
 
+<div id="sidebar-overlay"></div>
 <script src="static/app.js"></script>
 </body>
 </html>

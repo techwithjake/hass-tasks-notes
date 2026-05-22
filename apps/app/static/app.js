@@ -1525,6 +1525,8 @@ function renderNoteList() {
 function showNoteEditor(show) {
   qs('#note-placeholder').classList.toggle('hidden', show);
   qs('#note-editor-content').classList.toggle('hidden', !show);
+  // Mobile: slide between the notes list and the editor
+  qs('.notes-layout').classList.toggle('show-editor', show);
 }
 
 // ── Helpers ────────────────────────────────────────────────
@@ -1824,6 +1826,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         openQuickAdd();
       }
     }
+  });
+
+  // ── Mobile: sidebar overlay ─────────────────────────────
+  {
+    const sidebar = qs('#sidebar');
+    const overlay = qs('#sidebar-overlay');
+    function openSidebar() {
+      sidebar.classList.add('open');
+      overlay.classList.add('visible');
+    }
+    function closeSidebar() {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('visible');
+    }
+    qs('#mobile-sidebar-btn').addEventListener('click', openSidebar);
+    qs('#mobile-notes-sidebar-btn').addEventListener('click', openSidebar);
+    overlay.addEventListener('click', closeSidebar);
+    // Close sidebar on any nav/project item click on mobile
+    sidebar.addEventListener('click', e => {
+      if (window.innerWidth <= 768 && e.target.closest('.nav-item, .project-nav-item')) {
+        closeSidebar();
+      }
+    });
+  }
+
+  // ── Mobile: notes back button ────────────────────────────
+  qs('#notes-back-btn').addEventListener('click', () => {
+    qs('.notes-layout').classList.remove('show-editor');
   });
 
   // ── Bootstrap ──────────────────────────────────────────

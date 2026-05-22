@@ -1604,3 +1604,243 @@ select { cursor: pointer; }
 
 /* ── Misc ────────────────────────────────────────────────── */
 .hidden { display: none !important; }
+
+/* ── Mobile menu button (hidden on desktop) ──────────────── */
+.mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: var(--r);
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+  transition: background 0.1s, color 0.1s;
+}
+.mobile-menu-btn:hover { background: var(--bg-subtle); color: var(--text); }
+
+/* Notes "← Back" button (hidden on desktop) */
+.notes-back-btn {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: var(--r);
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: color 0.1s, background 0.1s;
+}
+.notes-back-btn:hover { color: var(--text); background: var(--bg-subtle); }
+
+/* Sidebar backdrop overlay */
+#sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 90;
+}
+#sidebar-overlay.visible { display: block; }
+
+/* ── Responsive: tablet / mobile  (≤ 768 px) ────────────── */
+@media (max-width: 768px) {
+
+  /* ── Sidebar: slide-in overlay ── */
+  #sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+    width: min(280px, 85vw);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+  #sidebar.open {
+    transform: translateX(0);
+    box-shadow: 2px 0 24px rgba(0, 0, 0, 0.25);
+  }
+
+  /* ── Show mobile buttons ── */
+  .mobile-menu-btn { display: flex; }
+
+  /* ── View header ── */
+  #view-header { padding: 12px 14px 0; }
+  #view-title { font-size: 18px; }
+  .view-title-row { gap: 8px; }
+  #sections-container { padding: 0 14px 20px; }
+
+  /* ── Task items: enlarged touch area ── */
+  .task-item { padding: 10px 4px; gap: 10px; }
+  .task-check { width: 22px; height: 22px; margin-top: 0; }
+  .subtask-item { padding: 6px 4px 6px 24px; }
+  .subtask-item .task-check { width: 18px; height: 18px; }
+
+  /* ── Filter toolbar ── */
+  .filter-btn { padding: 7px 10px; font-size: 13px; }
+  .view-toolbar { padding-bottom: 10px; gap: 6px; }
+  #task-search { flex: 1; min-width: 0; }
+  #priority-filter, #sort-mode { font-size: 13px; }
+
+  /* ── Add task / section triggers ── */
+  .add-task-trigger { padding: 10px 4px; font-size: 14px; }
+  .add-section-trigger { padding: 10px 4px; font-size: 13px; }
+
+  /* ── Always show hover-only controls on touch ── */
+  .section-actions { opacity: 1; }
+  .project-nav-edit { opacity: 1; }
+
+  /* ── Nav items: taller touch target ── */
+  .nav-item { padding: 10px 8px; font-size: 14px; }
+  .nav-icon { font-size: 16px; width: 22px; }
+  .project-nav-item { padding: 8px 8px; font-size: 14px; }
+
+  /* ── Detail panel: full-screen slide-in overlay ──
+     Use #task-detail specificity to override .hidden's display:none !important */
+  #task-detail.detail-panel {
+    display: flex !important;
+    position: fixed;
+    inset: 0;
+    width: 100% !important;
+    z-index: 80;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    pointer-events: none;
+  }
+  #task-detail.detail-panel:not(.hidden) {
+    transform: translateX(0);
+    pointer-events: auto;
+    box-shadow: -2px 0 24px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Detail close button: larger touch target */
+  .btn-icon {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+  }
+
+  /* Detail panel internals */
+  .detail-body { padding: 0 14px 16px; }
+  .detail-footer { gap: 10px; }
+  #detail-save-btn, #detail-delete-btn {
+    flex: 1;
+    text-align: center;
+    font-size: 14px;
+    padding: 10px;
+  }
+  .detail-top-row select { flex: 1; padding: 8px 10px; font-size: 14px; }
+  .detail-title-input { font-size: 18px; }
+  .detail-field { padding: 8px 10px; }
+  .detail-field input, .detail-field select { font-size: 14px; padding: 4px 0; }
+  .detail-field label { font-size: 12px; }
+  #detail-notes { font-size: 14px; padding: 10px 12px; }
+  .detail-add-subtask input { font-size: 14px; }
+
+  /* ── Shared buttons ── */
+  .btn-primary, .btn-danger, .btn-ghost { padding: 9px 16px; font-size: 14px; }
+
+  /* ── Modals ── */
+  .modal-content { max-height: 90vh; }
+  /* 16px prevents iOS from auto-zooming into inputs */
+  .modal-body input, .modal-body select, .modal-body textarea { font-size: 16px; }
+  .modal-footer { flex-wrap: wrap; gap: 8px; }
+
+  /* ── Quick-add modal ── */
+  #quick-add-title { font-size: 16px; }
+  .quick-add-meta { gap: 8px; }
+  .quick-add-meta select,
+  .quick-add-due-wrap input { font-size: 14px; padding: 8px 10px; }
+  .quick-add-hint { display: none; }
+
+  /* ── Date picker: day cells larger for touch ── */
+  .dp-day { padding: 7px 2px; }
+  .dp-nav { padding: 6px 10px; }
+
+  /* ── Color swatches: larger tap target ── */
+  .color-swatch { width: 30px; height: 30px; }
+
+  /* ── Notes workspace: slide between list and editor ── */
+  .notes-layout { position: relative; overflow: hidden; }
+  .notes-sidebar {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    width: 100%;
+    border-right: none;
+    transform: translateX(0);
+    transition: transform 0.25s ease;
+  }
+  .notes-layout.show-editor .notes-sidebar { transform: translateX(-100%); }
+  .note-editor {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+  }
+  .notes-layout.show-editor .note-editor { transform: translateX(0); }
+
+  /* Notes back button */
+  .notes-back-btn { display: flex; }
+
+  /* Notes toolbar: row layout on mobile */
+  .notes-toolbar {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .notes-toolbar input[type="search"] { flex: 1; width: auto; min-width: 0; order: 2; }
+  #mobile-notes-sidebar-btn { order: 1; }
+  #new-note-btn { order: 3; }
+
+  /* Editor header: wrap onto two rows on mobile */
+  .editor-header { flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
+  .editor-header input[type="text"] { order: 2; flex: 1; min-width: 120px; }
+  #note-folder-select { order: 3; }
+  .editor-actions { order: 4; width: 100%; justify-content: flex-end; }
+
+  /* ── Toast: full-width on mobile ── */
+  .toast { bottom: 12px; left: 12px; right: 12px; text-align: center; font-size: 14px; }
+
+  /* ── Inline task form ── */
+  .inline-title { font-size: 16px; padding: 10px 12px; }
+  .inline-task-extras { flex-direction: column; }
+  .inline-task-extras input,
+  .inline-task-extras select { font-size: 14px; padding: 8px 10px; width: 100%; }
+}
+
+/* ── Responsive: small phones (≤ 480 px) ────────────────── */
+@media (max-width: 480px) {
+  #view-header { padding: 10px 12px 0; }
+  #sections-container { padding: 0 10px 16px; }
+
+  .view-toolbar { flex-direction: column; align-items: stretch; }
+  .filter-group { justify-content: center; }
+  #priority-filter, #sort-mode, #task-search { width: 100%; }
+
+  .modal-footer { flex-direction: column; gap: 8px; }
+  .modal-footer .btn-primary,
+  .modal-footer .btn-danger,
+  .modal-footer .btn-ghost { width: 100%; text-align: center; }
+
+  .inline-task-actions { flex-direction: column; }
+  .inline-task-actions .btn-primary,
+  .inline-task-actions .btn-ghost { width: 100%; text-align: center; }
+}
