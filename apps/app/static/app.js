@@ -71,6 +71,21 @@ async function api(method, path, body) {
   return res.json();
 }
 
+// ── Theme ──────────────────────────────────────────────────
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  const icon  = document.getElementById('theme-icon');
+  const label = document.getElementById('theme-label');
+  if (theme === 'dark') {
+    icon.textContent  = '☀';
+    label.textContent = 'Light mode';
+  } else {
+    icon.textContent  = '🌙';
+    label.textContent = 'Dark mode';
+  }
+}
+
 // ── Time parser ────────────────────────────────────────────
 // Returns "HH:MM" (24h) or null.  Accepts: 3pm, 3:30pm, 3:30 pm, 15:00, noon, midnight
 function parseTime(t) {
@@ -1572,6 +1587,13 @@ function debounce(fn, ms) {
 
 // ── Init ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+
+  // ── Theme init ─────────────────────────────────────────
+  applyTheme(localStorage.getItem('theme') || 'dark');
+  qs('#theme-toggle-btn').addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  });
 
   // ── Sidebar: view navigation ───────────────────────────
   document.querySelectorAll('[data-view]').forEach(btn => {

@@ -28,6 +28,25 @@
   --r-lg:           10px;
 }
 
+:root[data-theme="dark"] {
+  --primary-light:  #2d1310;
+  --sidebar-bg:     #161616;
+  --bg:             #111111;
+  --bg-subtle:      #1a1a1a;
+  --surface:        #1c1c1c;
+  --border:         #2a2a2a;
+  --text:           #e6e6e6;
+  --text-muted:     #888888;
+  --text-light:     #4a4a4a;
+  --p-high-bg:      #2d1310;
+  --tag-bg:         #1a2d4a;
+  --tag-fg:         #7aadff;
+  --nav-active-bg:  #2d1310;
+}
+:root[data-theme="dark"] .modal         { background: rgba(0,0,0,0.55); }
+:root[data-theme="dark"] .modal-content { box-shadow: 0 16px 40px rgba(0,0,0,0.5); }
+:root[data-theme="dark"] .toast         { background: #e4e4e4; color: #111111; }
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
