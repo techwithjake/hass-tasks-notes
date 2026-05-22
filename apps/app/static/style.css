@@ -1738,12 +1738,21 @@ select { cursor: pointer; }
   /* Detail panel internals */
   .detail-body { padding: 0 14px 16px; }
   .detail-footer { gap: 10px; }
-  #detail-save-btn, #detail-delete-btn {
+  #detail-save-btn {
     flex: 1;
     text-align: center;
     font-size: 14px;
     padding: 10px;
   }
+  #detail-delete-btn {
+    flex: 0 0 auto;
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+  #detail-delete-btn:hover { background: var(--danger); color: #fff; }
   .detail-top-row select { flex: 1; padding: 8px 10px; font-size: 14px; }
   .detail-title-input { font-size: 18px; }
   .detail-field { padding: 8px 10px; }
