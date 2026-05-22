@@ -23,30 +23,39 @@ def _fts_query(search: str) -> Optional[str]:
 
 
 def _row_to_dict(row) -> dict:
+    keys = row.keys()
     return {
-        "id": row["id"],
-        "title": row["title"],
-        "content": row["content"],
-        "tags": [t.strip() for t in row["tags"].split(",") if t.strip()],
+        "id":        row["id"],
+        "title":     row["title"],
+        "content":   row["content"],
+        "tags":      [t.strip() for t in row["tags"].split(",") if t.strip()],
+        "folder_id": row["folder_id"] if "folder_id" in keys else None,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
 
 
 class NoteCreate(BaseModel):
-    title: str
-    content: str = ""
-    tags: list[str] = []
+    title:     str
+    content:   str = ""
+    tags:      list[str] = []
+    folder_id: Optional[int] = None
 
 
 class NoteUpdate(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
-    tags: Optional[list[str]] = None
+    title:     Optional[str] = None
+    content:   Optional[str] = None
+    tags:      Optional[list[str]] = None
+    folder_id: Optional[int] = None
 
 
 @router.get("")
-async def list_notes(search: str = Query("")):
+async def list_notes(
+    search:    str          = Query(""),
+    tag:       str          = Query(""),
+    folder_id: Optional[int] = Query(None),
+    unfoldered: bool        = Query(False),
+):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
 
@@ -64,8 +73,21 @@ async def list_notes(search: str = Query("")):
             query = f"SELECT * FROM notes WHERE id IN ({placeholders}) ORDER BY updated_at DESC"
             params: list = ids[:]
         else:
-            query = "SELECT * FROM notes ORDER BY updated_at DESC"
+            query = "SELECT * FROM notes WHERE 1=1"
             params = []
+
+        if tag:
+            query += " AND (',' || tags || ',' LIKE ?)"
+            params.append(f"%,{tag},%")
+
+        if folder_id is not None:
+            query += " AND folder_id = ?"
+            params.append(folder_id)
+        elif unfoldered:
+            query += " AND folder_id IS NULL"
+
+        if "ORDER BY" not in query:
+            query += " ORDER BY updated_at DESC"
 
         async with db.execute(query, params) as c:
             return [_row_to_dict(r) for r in await c.fetchall()]
@@ -77,8 +99,8 @@ async def create_note(note: NoteCreate):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute(
-            "INSERT INTO notes (title, content, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-            (note.title, note.content, ",".join(note.tags), now, now),
+            "INSERT INTO notes (title, content, tags, folder_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (note.title, note.content, ",".join(note.tags), note.folder_id, now, now),
         )
         await db.commit()
         async with db.execute("SELECT * FROM notes WHERE id = ?", (cursor.lastrowid,)) as c:
@@ -120,6 +142,26 @@ async def update_note(note_id: int, note: NoteUpdate):
         await db.commit()
         async with db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)) as c:
             return _row_to_dict(await c.fetchone())
+
+
+@router.get("/{note_id}/backlinks")
+async def get_backlinks(note_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT title FROM notes WHERE id = ?", (note_id,)) as c:
+            row = await c.fetchone()
+        if not row:
+            raise HTTPException(404, "Note not found")
+        title = row["title"]
+        # Escape LIKE special chars in title
+        escaped = title.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        pattern = f"%[[{escaped}]]%"
+        async with db.execute(
+            "SELECT id, title, updated_at FROM notes WHERE id != ? AND content LIKE ? ESCAPE '\\'",
+            (note_id, pattern),
+        ) as c:
+            rows = await c.fetchall()
+        return [{"id": r["id"], "title": r["title"], "updated_at": r["updated_at"]} for r in rows]
 
 
 @router.delete("/{note_id}")

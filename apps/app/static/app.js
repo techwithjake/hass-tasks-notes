@@ -35,6 +35,11 @@ const state = {
   activeNoteId: null,
   noteSearch:   '',
   noteDirty:    false,
+  noteMode:        'edit',   // 'edit' | 'preview'
+  noteTagFilter:   '',
+  noteTags:        [],       // full tag list, preserved across filter changes
+  activeFolderId:  null,     // null = All Notes
+  folders:         [],
 
   // Modal state
   editingProjectId: null,
@@ -1182,12 +1187,216 @@ async function updateBadges() {
   } catch (_) {}
 }
 
+// ── Markdown renderer ──────────────────────────────────────
+function inlineMd(text) {
+  // HTML-escape, then apply inline markdown
+  text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Inline code (protect from further processing)
+  const codeSpans = [];
+  text = text.replace(/`([^`]+)`/g, (_, c) => {
+    codeSpans.push(`<code>${c}</code>`);
+    return `\x02C${codeSpans.length - 1}\x03`;
+  });
+  // Wikilinks [[Title]] or [[Title|alias]] — resolved against state.notes
+  text = text.replace(/\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g, (_, target, alias) => {
+    const label = esc(alias || target);
+    const note  = state.notes.find(n => n.title.toLowerCase() === target.trim().toLowerCase());
+    return note
+      ? `<a class="wikilink" data-id="${note.id}" href="#">${label}</a>`
+      : `<a class="wikilink wikilink-missing" href="#">${label}</a>`;
+  });
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2">');
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
+  text = text.replace(/\*\*(.+?)\*\*|__(.+?)__/g, (_, a, b) => `<strong>${a||b}</strong>`);
+  text = text.replace(/\*(.+?)\*|_(.+?)_/g,       (_, a, b) => `<em>${a||b}</em>`);
+  // Restore inline code
+  text = text.replace(/\x02C(\d+)\x03/g, (_, i) => codeSpans[+i]);
+  return text;
+}
+
+function renderMarkdown(src) {
+  if (!src) return '';
+
+  // Extract fenced code blocks first
+  const blocks = [];
+  src = src.replace(/^```(\w*)\n?([\s\S]*?)^```/gm, (_, lang, code) => {
+    const safe = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const cls  = lang ? ` class="language-${lang}"` : '';
+    blocks.push(`<pre><code${cls}>${safe.trimEnd()}</code></pre>`);
+    return `\x02BLOCK${blocks.length - 1}\x03`;
+  });
+
+  const lines  = src.split('\n');
+  const out    = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Restore fenced block
+    const bm = line.trim().match(/^\x02BLOCK(\d+)\x03$/);
+    if (bm) { out.push(blocks[+bm[1]]); i++; continue; }
+
+    // Heading
+    const hm = line.match(/^(#{1,6}) (.+)/);
+    if (hm) {
+      out.push(`<h${hm[1].length}>${inlineMd(hm[2])}</h${hm[1].length}>`);
+      i++; continue;
+    }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
+
+    // Blockquote
+    if (line.startsWith('> ')) {
+      const qLines = [];
+      while (i < lines.length && lines[i].startsWith('> ')) {
+        qLines.push(lines[i].slice(2)); i++;
+      }
+      out.push(`<blockquote>${renderMarkdown(qLines.join('\n'))}</blockquote>`);
+      continue;
+    }
+
+    // Unordered list
+    if (/^[-*+] /.test(line)) {
+      const items = [];
+      while (i < lines.length && /^[-*+] /.test(lines[i])) {
+        items.push(`<li>${inlineMd(lines[i].replace(/^[-*+] /, ''))}</li>`); i++;
+      }
+      out.push(`<ul>${items.join('')}</ul>`); continue;
+    }
+
+    // Ordered list
+    if (/^\d+\. /.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i])) {
+        items.push(`<li>${inlineMd(lines[i].replace(/^\d+\. /, ''))}</li>`); i++;
+      }
+      out.push(`<ol>${items.join('')}</ol>`); continue;
+    }
+
+    // Blank line
+    if (!line.trim()) { i++; continue; }
+
+    // Paragraph — collect consecutive non-block lines
+    const para = [];
+    while (i < lines.length && lines[i].trim() &&
+           !/^(#{1,6} |[-*+] |\d+\. |> |[-*_]{3,}\s*$|\x02BLOCK)/.test(lines[i])) {
+      para.push(inlineMd(lines[i])); i++;
+    }
+    if (para.length) out.push(`<p>${para.join('<br>')}</p>`);
+  }
+
+  return out.join('\n');
+}
+
+function applyNoteMode() {
+  const preview = state.noteMode === 'preview';
+  qs('#note-content').classList.toggle('hidden', preview);
+  qs('#note-preview').classList.toggle('hidden', !preview);
+  qs('#note-mode-btn').textContent = preview ? 'Edit' : 'Preview';
+  qs('#note-mode-btn').classList.toggle('active', preview);
+  if (preview) {
+    qs('#note-preview').innerHTML = renderMarkdown(qs('#note-content').value);
+    qs('#note-preview').querySelectorAll('.wikilink[data-id]').forEach(a => {
+      a.addEventListener('click', e => { e.preventDefault(); openNote(+a.dataset.id); });
+    });
+  }
+}
+
+function toggleNoteMode() {
+  state.noteMode = state.noteMode === 'edit' ? 'preview' : 'edit';
+  applyNoteMode();
+}
+
 // ── Notes ──────────────────────────────────────────────────
 async function loadNotes() {
   const p = new URLSearchParams();
-  if (state.noteSearch) p.set('search', state.noteSearch);
+  if (state.noteSearch)    p.set('search', state.noteSearch);
+  if (state.noteTagFilter) p.set('tag', state.noteTagFilter);
+  if (state.activeFolderId !== null) p.set('folder_id', state.activeFolderId);
   state.notes = await api('GET', `api/notes${p.toString() ? '?' + p : ''}`);
+  // Rebuild the full tag list only when not filtering so pills don't shrink
+  if (!state.noteTagFilter && state.activeFolderId === null) {
+    state.noteTags = [...new Set(state.notes.flatMap(n => n.tags))].sort();
+  }
   renderNoteList();
+  renderNoteTags();
+}
+
+async function loadFolders() {
+  state.folders = await api('GET', 'api/folders');
+  renderFolderList();
+}
+
+function renderFolderList() {
+  const el = qs('#note-folder-list');
+  const allActive = state.activeFolderId === null;
+
+  const rows = state.folders.map(f => `
+    <div class="note-folder-item${f.id === state.activeFolderId ? ' active' : ''}" data-id="${f.id}">
+      <span class="note-folder-icon">📁</span>
+      <span class="note-folder-name">${esc(f.name)}</span>
+      <span class="note-folder-actions">
+        <button class="js-rename-folder" data-id="${f.id}" title="Rename">✎</button>
+        <button class="js-delete-folder" data-id="${f.id}" title="Delete">×</button>
+      </span>
+    </div>
+  `).join('');
+
+  el.innerHTML = `
+    <div class="note-folder-item${allActive ? ' active' : ''}" data-id="all">
+      <span class="note-folder-icon">🗂</span>
+      <span class="note-folder-name">All Notes</span>
+    </div>
+    ${rows}
+    <div class="note-folder-add">
+      <button id="new-folder-btn">+ New Folder</button>
+    </div>
+  `;
+
+  el.querySelectorAll('.note-folder-item').forEach(item => {
+    item.addEventListener('click', e => {
+      if (e.target.closest('.note-folder-actions')) return;
+      state.activeFolderId = item.dataset.id === 'all' ? null : +item.dataset.id;
+      loadNotes();
+      renderFolderList();
+    });
+  });
+
+  el.querySelectorAll('.js-rename-folder').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const folder = state.folders.find(f => f.id === +btn.dataset.id);
+      const name = prompt('Rename folder:', folder?.name)?.trim();
+      if (!name || name === folder?.name) return;
+      await api('PUT', `api/folders/${btn.dataset.id}`, { name });
+      await loadFolders();
+    });
+  });
+
+  el.querySelectorAll('.js-delete-folder').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const folder = state.folders.find(f => f.id === +btn.dataset.id);
+      if (!confirm(`Delete folder "${folder?.name}"? Notes inside will become unorganised.`)) return;
+      if (state.activeFolderId === +btn.dataset.id) state.activeFolderId = null;
+      await api('DELETE', `api/folders/${btn.dataset.id}`);
+      await loadFolders();
+      await loadNotes();
+    });
+  });
+
+  const newBtn = qs('#new-folder-btn');
+  if (newBtn) {
+    newBtn.addEventListener('click', async () => {
+      const name = prompt('Folder name:')?.trim();
+      if (!name) return;
+      await api('POST', 'api/folders', { name });
+      await loadFolders();
+    });
+  }
 }
 
 async function createNote() {
@@ -1198,10 +1407,12 @@ async function createNote() {
 
 async function saveNote() {
   if (!state.activeNoteId) return;
-  const title   = qs('#note-title').value.trim() || 'Untitled';
-  const content = qs('#note-content').value;
-  const tags    = qs('#note-tags').value.split(',').map(t => t.trim()).filter(Boolean);
-  await api('PUT', `api/notes/${state.activeNoteId}`, { title, content, tags });
+  const title     = qs('#note-title').value.trim() || 'Untitled';
+  const content   = qs('#note-content').value;
+  const tags      = qs('#note-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const folderVal = qs('#note-folder-select').value;
+  const folder_id = folderVal ? +folderVal : null;
+  await api('PUT', `api/notes/${state.activeNoteId}`, { title, content, tags, folder_id });
   state.noteDirty = false;
   await loadNotes();
   toast('Note saved');
@@ -1225,8 +1436,48 @@ async function openNote(id) {
   qs('#note-title').value   = note.title;
   qs('#note-content').value = note.content;
   qs('#note-tags').value    = note.tags.join(', ');
+  // Populate folder select
+  const folderSel = qs('#note-folder-select');
+  folderSel.innerHTML = '<option value="">No folder</option>' +
+    state.folders.map(f =>
+      `<option value="${f.id}"${f.id === note.folder_id ? ' selected' : ''}>${esc(f.name)}</option>`
+    ).join('');
+  qs('#note-backlinks').classList.add('hidden');
   showNoteEditor(true);
+  applyNoteMode();
   renderNoteList();
+  loadBacklinks(id);
+}
+
+function renderNoteTags() {
+  const allTags = state.noteTags;
+  const el = qs('#note-tag-list');
+  if (!allTags.length) { el.innerHTML = ''; return; }
+  el.innerHTML = allTags.map(t =>
+    `<span class="note-tag-pill${t === state.noteTagFilter ? ' active' : ''}" data-tag="${esc(t)}">${esc(t)}</span>`
+  ).join('');
+  el.querySelectorAll('.note-tag-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      state.noteTagFilter = pill.dataset.tag === state.noteTagFilter ? '' : pill.dataset.tag;
+      loadNotes();
+    });
+  });
+}
+
+async function loadBacklinks(noteId) {
+  const backlinks = await api('GET', `api/notes/${noteId}/backlinks`);
+  const el = qs('#note-backlinks');
+  if (!backlinks.length) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="note-backlinks-header">Linked from</div>
+    ${backlinks.map(n =>
+      `<a class="note-backlink-item" data-id="${n.id}" href="#">${esc(n.title)}</a>`
+    ).join('')}
+  `;
+  el.querySelectorAll('.note-backlink-item').forEach(a => {
+    a.addEventListener('click', e => { e.preventDefault(); openNote(+a.dataset.id); });
+  });
 }
 
 function renderNoteList() {
@@ -1345,6 +1596,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     qs('#notes-workspace').classList.add('active');
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
     qs('#notes-nav-btn').classList.add('active');
+    loadFolders();
     loadNotes();
   });
 
@@ -1507,6 +1759,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   qs('#new-note-btn').addEventListener('click', createNote);
   qs('#save-note-btn').addEventListener('click', saveNote);
   qs('#delete-note-btn').addEventListener('click', deleteNote);
+  qs('#note-mode-btn').addEventListener('click', toggleNoteMode);
 
   qs('#note-search').addEventListener('input', debounce(e => {
     state.noteSearch = e.target.value;
@@ -1516,6 +1769,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   ['#note-title','#note-content','#note-tags'].forEach(sel =>
     qs(sel).addEventListener('input', () => { state.noteDirty = true; })
   );
+  qs('#note-folder-select').addEventListener('change', () => { state.noteDirty = true; });
 
   // ── Keyboard shortcuts ─────────────────────────────────
   document.addEventListener('keydown', e => {

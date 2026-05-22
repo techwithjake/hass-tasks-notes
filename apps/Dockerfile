@@ -9,5 +9,7 @@ COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
 COPY app/ .
+COPY run.sh /run.sh
+RUN chmod a+x /run.sh
 
-CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8099"]
+ENTRYPOINT ["/run.sh"]

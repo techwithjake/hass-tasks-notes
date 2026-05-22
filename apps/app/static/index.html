@@ -155,6 +155,8 @@
             <input type="search" id="note-search" placeholder="Search notes…">
             <button id="new-note-btn" class="btn-primary">+ New</button>
           </div>
+          <div id="note-tag-list" class="note-tag-list"></div>
+          <div id="note-folder-list" class="note-folder-list"></div>
           <div id="note-list" class="note-list"></div>
         </aside>
         <div class="note-editor">
@@ -164,7 +166,9 @@
           <div id="note-editor-content" class="hidden">
             <div class="editor-header">
               <input type="text" id="note-title" placeholder="Note title">
+              <select id="note-folder-select" class="note-folder-select"></select>
               <div class="editor-actions">
+                <button id="note-mode-btn" class="btn-mode">Preview</button>
                 <button id="delete-note-btn" class="btn-danger">Delete</button>
                 <button id="save-note-btn" class="btn-primary">Save</button>
               </div>
@@ -173,6 +177,8 @@
               <input type="text" id="note-tags" placeholder="Tags (comma-separated)">
             </div>
             <textarea id="note-content" placeholder="Write in Markdown…" spellcheck="true"></textarea>
+            <div id="note-preview" class="note-preview hidden"></div>
+            <div id="note-backlinks" class="note-backlinks hidden"></div>
           </div>
         </div>
       </div>
