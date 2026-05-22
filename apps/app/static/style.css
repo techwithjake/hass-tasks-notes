@@ -1048,6 +1048,27 @@ select { cursor: pointer; }
 }
 .notes-toolbar input { width: 100%; }
 
+.note-tag-list {
+  padding: 0 8px 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.note-tag-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.1s;
+  font-weight: 500;
+}
+.note-tag-pill:hover { border-color: var(--primary); color: var(--primary); }
+.note-tag-pill.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+
 .note-list { overflow-y: auto; flex: 1; padding: 6px; }
 
 .note-item {
@@ -1238,6 +1259,47 @@ select { cursor: pointer; }
 .note-preview th,
 .note-preview td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
 .note-preview th { background: var(--bg-subtle); font-weight: 600; }
+
+/* ── Wikilinks (inside .note-preview) ───────────────────── */
+.note-preview .wikilink {
+  color: var(--primary);
+  text-decoration: none;
+  border-bottom: 1px solid var(--primary-light);
+  transition: border-color 0.1s;
+}
+.note-preview .wikilink:hover { border-bottom-color: var(--primary); }
+.note-preview .wikilink-missing {
+  color: var(--text-muted);
+  border-bottom: 1px dashed var(--border);
+}
+
+/* ── Backlinks panel ─────────────────────────────────────── */
+.note-backlinks {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 12px 20px 16px;
+  background: var(--bg-subtle);
+}
+.note-backlinks-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.note-backlink-item {
+  font-size: 13px;
+  color: var(--primary);
+  cursor: pointer;
+  padding: 3px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+.note-backlink-item:hover { text-decoration: underline; }
+.note-backlink-item::before { content: '←'; font-size: 11px; color: var(--text-muted); }
 
 /* ── Date Picker ─────────────────────────────────────────── */
 

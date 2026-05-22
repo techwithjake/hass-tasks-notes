@@ -35,7 +35,9 @@ const state = {
   activeNoteId: null,
   noteSearch:   '',
   noteDirty:    false,
-  noteMode:     'edit',   // 'edit' | 'preview'
+  noteMode:      'edit',   // 'edit' | 'preview'
+  noteTagFilter: '',
+  noteTags:      [],       // full tag list, preserved across filter changes
 
   // Modal state
   editingProjectId: null,
@@ -1193,6 +1195,14 @@ function inlineMd(text) {
     codeSpans.push(`<code>${c}</code>`);
     return `\x02C${codeSpans.length - 1}\x03`;
   });
+  // Wikilinks [[Title]] or [[Title|alias]] — resolved against state.notes
+  text = text.replace(/\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g, (_, target, alias) => {
+    const label = esc(alias || target);
+    const note  = state.notes.find(n => n.title.toLowerCase() === target.trim().toLowerCase());
+    return note
+      ? `<a class="wikilink" data-id="${note.id}" href="#">${label}</a>`
+      : `<a class="wikilink wikilink-missing" href="#">${label}</a>`;
+  });
   text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2">');
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
   text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
@@ -1285,7 +1295,12 @@ function applyNoteMode() {
   qs('#note-preview').classList.toggle('hidden', !preview);
   qs('#note-mode-btn').textContent = preview ? 'Edit' : 'Preview';
   qs('#note-mode-btn').classList.toggle('active', preview);
-  if (preview) qs('#note-preview').innerHTML = renderMarkdown(qs('#note-content').value);
+  if (preview) {
+    qs('#note-preview').innerHTML = renderMarkdown(qs('#note-content').value);
+    qs('#note-preview').querySelectorAll('.wikilink[data-id]').forEach(a => {
+      a.addEventListener('click', e => { e.preventDefault(); openNote(+a.dataset.id); });
+    });
+  }
 }
 
 function toggleNoteMode() {
@@ -1296,9 +1311,15 @@ function toggleNoteMode() {
 // ── Notes ──────────────────────────────────────────────────
 async function loadNotes() {
   const p = new URLSearchParams();
-  if (state.noteSearch) p.set('search', state.noteSearch);
+  if (state.noteSearch)   p.set('search', state.noteSearch);
+  if (state.noteTagFilter) p.set('tag', state.noteTagFilter);
   state.notes = await api('GET', `api/notes${p.toString() ? '?' + p : ''}`);
+  // Rebuild the full tag list only when not filtering so pills don't shrink
+  if (!state.noteTagFilter) {
+    state.noteTags = [...new Set(state.notes.flatMap(n => n.tags))].sort();
+  }
   renderNoteList();
+  renderNoteTags();
 }
 
 async function createNote() {
@@ -1336,9 +1357,42 @@ async function openNote(id) {
   qs('#note-title').value   = note.title;
   qs('#note-content').value = note.content;
   qs('#note-tags').value    = note.tags.join(', ');
+  qs('#note-backlinks').classList.add('hidden');
   showNoteEditor(true);
   applyNoteMode();
   renderNoteList();
+  loadBacklinks(id);
+}
+
+function renderNoteTags() {
+  const allTags = state.noteTags;
+  const el = qs('#note-tag-list');
+  if (!allTags.length) { el.innerHTML = ''; return; }
+  el.innerHTML = allTags.map(t =>
+    `<span class="note-tag-pill${t === state.noteTagFilter ? ' active' : ''}" data-tag="${esc(t)}">${esc(t)}</span>`
+  ).join('');
+  el.querySelectorAll('.note-tag-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      state.noteTagFilter = pill.dataset.tag === state.noteTagFilter ? '' : pill.dataset.tag;
+      loadNotes();
+    });
+  });
+}
+
+async function loadBacklinks(noteId) {
+  const backlinks = await api('GET', `api/notes/${noteId}/backlinks`);
+  const el = qs('#note-backlinks');
+  if (!backlinks.length) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="note-backlinks-header">Linked from</div>
+    ${backlinks.map(n =>
+      `<a class="note-backlink-item" data-id="${n.id}" href="#">${esc(n.title)}</a>`
+    ).join('')}
+  `;
+  el.querySelectorAll('.note-backlink-item').forEach(a => {
+    a.addEventListener('click', e => { e.preventDefault(); openNote(+a.dataset.id); });
+  });
 }
 
 function renderNoteList() {

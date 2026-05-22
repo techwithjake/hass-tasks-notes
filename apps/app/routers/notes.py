@@ -46,7 +46,7 @@ class NoteUpdate(BaseModel):
 
 
 @router.get("")
-async def list_notes(search: str = Query("")):
+async def list_notes(search: str = Query(""), tag: str = Query("")):
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
 
@@ -64,8 +64,15 @@ async def list_notes(search: str = Query("")):
             query = f"SELECT * FROM notes WHERE id IN ({placeholders}) ORDER BY updated_at DESC"
             params: list = ids[:]
         else:
-            query = "SELECT * FROM notes ORDER BY updated_at DESC"
+            query = "SELECT * FROM notes WHERE 1=1"
             params = []
+
+        if tag:
+            query += " AND (',' || tags || ',' LIKE ?)"
+            params.append(f"%,{tag},%")
+
+        if "ORDER BY" not in query:
+            query += " ORDER BY updated_at DESC"
 
         async with db.execute(query, params) as c:
             return [_row_to_dict(r) for r in await c.fetchall()]
@@ -120,6 +127,26 @@ async def update_note(note_id: int, note: NoteUpdate):
         await db.commit()
         async with db.execute("SELECT * FROM notes WHERE id = ?", (note_id,)) as c:
             return _row_to_dict(await c.fetchone())
+
+
+@router.get("/{note_id}/backlinks")
+async def get_backlinks(note_id: int):
+    async with aiosqlite.connect(DB_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT title FROM notes WHERE id = ?", (note_id,)) as c:
+            row = await c.fetchone()
+        if not row:
+            raise HTTPException(404, "Note not found")
+        title = row["title"]
+        # Escape LIKE special chars in title
+        escaped = title.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        pattern = f"%[[{escaped}]]%"
+        async with db.execute(
+            "SELECT id, title, updated_at FROM notes WHERE id != ? AND content LIKE ? ESCAPE '\\'",
+            (note_id, pattern),
+        ) as c:
+            rows = await c.fetchall()
+        return [{"id": r["id"], "title": r["title"], "updated_at": r["updated_at"]} for r in rows]
 
 
 @router.delete("/{note_id}")
