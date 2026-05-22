@@ -1127,7 +1127,22 @@ select { cursor: pointer; }
   background: var(--surface);
   box-shadow: 0 0 0 3px rgba(219,64,53,0.08);
 }
-.editor-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.editor-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+
+.btn-mode {
+  padding: 3px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.1s;
+  font-weight: 500;
+}
+.btn-mode:hover { background: var(--surface); color: var(--text); border-color: var(--border-focus); }
+.btn-mode.active { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
 
 .editor-tags-row {
   padding: 6px 16px;
@@ -1168,6 +1183,61 @@ select { cursor: pointer; }
   background: var(--bg-subtle);
   color: var(--text);
 }
+
+/* ── Markdown preview ────────────────────────────────────── */
+.note-preview {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 28px;
+  background: var(--surface);
+  line-height: 1.75;
+  font-size: 14px;
+  color: var(--text);
+}
+.note-preview h1 {
+  font-size: 1.65em; font-weight: 700; margin: 0 0 .5em;
+  padding-bottom: .3em; border-bottom: 1px solid var(--border);
+}
+.note-preview h2 { font-size: 1.3em; font-weight: 600; margin: 1.2em 0 .4em; }
+.note-preview h3 { font-size: 1.1em; font-weight: 600; margin: 1em 0 .3em; }
+.note-preview h4,
+.note-preview h5,
+.note-preview h6 { font-size: 1em; font-weight: 600; margin: .8em 0 .2em; }
+.note-preview p { margin: 0 0 .8em; }
+.note-preview ul,
+.note-preview ol { margin: 0 0 .8em; padding-left: 1.6em; }
+.note-preview li { margin: .25em 0; }
+.note-preview li p { margin: 0; }
+.note-preview code {
+  background: var(--bg-subtle); border: 1px solid var(--border);
+  border-radius: 3px; padding: 1px 5px;
+  font-family: "SF Mono", "Cascadia Mono", "Fira Code", Menlo, monospace;
+  font-size: .88em;
+}
+.note-preview pre {
+  background: var(--bg-subtle); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 14px 16px;
+  overflow-x: auto; margin: 0 0 .8em;
+}
+.note-preview pre code { background: none; border: none; padding: 0; font-size: .88em; }
+.note-preview blockquote {
+  border-left: 3px solid var(--primary); margin: 0 0 .8em;
+  padding: .3em .9em; color: var(--text-muted);
+  background: var(--primary-light);
+  border-radius: 0 var(--r) var(--r) 0;
+}
+.note-preview blockquote p { margin: 0; }
+.note-preview hr { border: none; border-top: 1px solid var(--border); margin: 1.2em 0; }
+.note-preview a { color: var(--primary); text-decoration: none; }
+.note-preview a:hover { text-decoration: underline; }
+.note-preview strong { font-weight: 600; }
+.note-preview em { font-style: italic; }
+.note-preview del { text-decoration: line-through; color: var(--text-muted); }
+.note-preview img { max-width: 100%; border-radius: var(--r); display: block; margin: .5em 0; }
+.note-preview table { border-collapse: collapse; width: 100%; margin: 0 0 .8em; font-size: 13px; }
+.note-preview th,
+.note-preview td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+.note-preview th { background: var(--bg-subtle); font-weight: 600; }
 
 /* ── Date Picker ─────────────────────────────────────────── */
 

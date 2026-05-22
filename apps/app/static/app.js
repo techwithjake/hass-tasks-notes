@@ -35,6 +35,7 @@ const state = {
   activeNoteId: null,
   noteSearch:   '',
   noteDirty:    false,
+  noteMode:     'edit',   // 'edit' | 'preview'
 
   // Modal state
   editingProjectId: null,
@@ -1182,6 +1183,116 @@ async function updateBadges() {
   } catch (_) {}
 }
 
+// ── Markdown renderer ──────────────────────────────────────
+function inlineMd(text) {
+  // HTML-escape, then apply inline markdown
+  text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Inline code (protect from further processing)
+  const codeSpans = [];
+  text = text.replace(/`([^`]+)`/g, (_, c) => {
+    codeSpans.push(`<code>${c}</code>`);
+    return `\x02C${codeSpans.length - 1}\x03`;
+  });
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2">');
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
+  text = text.replace(/\*\*(.+?)\*\*|__(.+?)__/g, (_, a, b) => `<strong>${a||b}</strong>`);
+  text = text.replace(/\*(.+?)\*|_(.+?)_/g,       (_, a, b) => `<em>${a||b}</em>`);
+  // Restore inline code
+  text = text.replace(/\x02C(\d+)\x03/g, (_, i) => codeSpans[+i]);
+  return text;
+}
+
+function renderMarkdown(src) {
+  if (!src) return '';
+
+  // Extract fenced code blocks first
+  const blocks = [];
+  src = src.replace(/^```(\w*)\n?([\s\S]*?)^```/gm, (_, lang, code) => {
+    const safe = code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const cls  = lang ? ` class="language-${lang}"` : '';
+    blocks.push(`<pre><code${cls}>${safe.trimEnd()}</code></pre>`);
+    return `\x02BLOCK${blocks.length - 1}\x03`;
+  });
+
+  const lines  = src.split('\n');
+  const out    = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Restore fenced block
+    const bm = line.trim().match(/^\x02BLOCK(\d+)\x03$/);
+    if (bm) { out.push(blocks[+bm[1]]); i++; continue; }
+
+    // Heading
+    const hm = line.match(/^(#{1,6}) (.+)/);
+    if (hm) {
+      out.push(`<h${hm[1].length}>${inlineMd(hm[2])}</h${hm[1].length}>`);
+      i++; continue;
+    }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}\s*$/.test(line)) { out.push('<hr>'); i++; continue; }
+
+    // Blockquote
+    if (line.startsWith('> ')) {
+      const qLines = [];
+      while (i < lines.length && lines[i].startsWith('> ')) {
+        qLines.push(lines[i].slice(2)); i++;
+      }
+      out.push(`<blockquote>${renderMarkdown(qLines.join('\n'))}</blockquote>`);
+      continue;
+    }
+
+    // Unordered list
+    if (/^[-*+] /.test(line)) {
+      const items = [];
+      while (i < lines.length && /^[-*+] /.test(lines[i])) {
+        items.push(`<li>${inlineMd(lines[i].replace(/^[-*+] /, ''))}</li>`); i++;
+      }
+      out.push(`<ul>${items.join('')}</ul>`); continue;
+    }
+
+    // Ordered list
+    if (/^\d+\. /.test(line)) {
+      const items = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i])) {
+        items.push(`<li>${inlineMd(lines[i].replace(/^\d+\. /, ''))}</li>`); i++;
+      }
+      out.push(`<ol>${items.join('')}</ol>`); continue;
+    }
+
+    // Blank line
+    if (!line.trim()) { i++; continue; }
+
+    // Paragraph — collect consecutive non-block lines
+    const para = [];
+    while (i < lines.length && lines[i].trim() &&
+           !/^(#{1,6} |[-*+] |\d+\. |> |[-*_]{3,}\s*$|\x02BLOCK)/.test(lines[i])) {
+      para.push(inlineMd(lines[i])); i++;
+    }
+    if (para.length) out.push(`<p>${para.join('<br>')}</p>`);
+  }
+
+  return out.join('\n');
+}
+
+function applyNoteMode() {
+  const preview = state.noteMode === 'preview';
+  qs('#note-content').classList.toggle('hidden', preview);
+  qs('#note-preview').classList.toggle('hidden', !preview);
+  qs('#note-mode-btn').textContent = preview ? 'Edit' : 'Preview';
+  qs('#note-mode-btn').classList.toggle('active', preview);
+  if (preview) qs('#note-preview').innerHTML = renderMarkdown(qs('#note-content').value);
+}
+
+function toggleNoteMode() {
+  state.noteMode = state.noteMode === 'edit' ? 'preview' : 'edit';
+  applyNoteMode();
+}
+
 // ── Notes ──────────────────────────────────────────────────
 async function loadNotes() {
   const p = new URLSearchParams();
@@ -1226,6 +1337,7 @@ async function openNote(id) {
   qs('#note-content').value = note.content;
   qs('#note-tags').value    = note.tags.join(', ');
   showNoteEditor(true);
+  applyNoteMode();
   renderNoteList();
 }
 
@@ -1507,6 +1619,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   qs('#new-note-btn').addEventListener('click', createNote);
   qs('#save-note-btn').addEventListener('click', saveNote);
   qs('#delete-note-btn').addEventListener('click', deleteNote);
+  qs('#note-mode-btn').addEventListener('click', toggleNoteMode);
 
   qs('#note-search').addEventListener('input', debounce(e => {
     state.noteSearch = e.target.value;
