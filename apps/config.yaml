@@ -12,7 +12,7 @@ arch:
   - i386
 ingress: true
 ingress_port: 8099
-panel_icon: mdi:checkbox-marked-circle-plus
+panel_icon: mdi:notebook-check
 panel_title: Tasks & Notes
 map:
   - data:rw
