@@ -1,8 +1,8 @@
 name: Tasks & Notes
 description: Robust task manager and note taker for Home Assistant
 version: 0.1.0
-slug: apps
-image: "ghcr.io/techwithjake/hass-tasks-notes/{arch}-addon-apps"
+slug: hass_tasks_notes
+image: "ghcr.io/techwithjake/hass-tasks-notes/{arch}-addon-hass-tasks-notes"
 init: false
 arch:
   - aarch64
