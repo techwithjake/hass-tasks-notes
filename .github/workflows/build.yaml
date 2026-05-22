@@ -7,6 +7,10 @@ on:
     types: [published]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build:
     name: Build ${{ matrix.arch }}
@@ -65,5 +69,5 @@ jobs:
             BUILD_ARCH=${{ matrix.arch }}
             BUILD_VERSION=${{ steps.version.outputs.version }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/hass-tasks-notes/${{ matrix.arch }}-addon-apps:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/hass-tasks-notes/${{ matrix.arch }}-addon-apps:latest
+            ghcr.io/${{ github.repository_owner }}/hass-tasks-notes/${{ matrix.arch }}-addon-hass-tasks-notes:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/hass-tasks-notes/${{ matrix.arch }}-addon-hass-tasks-notes:latest
