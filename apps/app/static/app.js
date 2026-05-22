@@ -1525,6 +1525,8 @@ function renderNoteList() {
 function showNoteEditor(show) {
   qs('#note-placeholder').classList.toggle('hidden', show);
   qs('#note-editor-content').classList.toggle('hidden', !show);
+  // Mobile: slide between the notes list and the editor
+  qs('.notes-layout').classList.toggle('show-editor', show);
 }
 
 // ── Helpers ────────────────────────────────────────────────
@@ -1824,6 +1826,70 @@ document.addEventListener('DOMContentLoaded', async () => {
         openQuickAdd();
       }
     }
+  });
+
+  // ── Notes: Save/Delete split-button dropdown ────────────
+  {
+    const toggleBtn = qs('#note-actions-btn');
+    const menu      = qs('#note-actions-menu');
+
+    function positionMenu() {
+      const rect    = toggleBtn.getBoundingClientRect();
+      const menuW   = Math.max(menu.offsetWidth, 140);
+      let left = rect.right - menuW;
+      let top  = rect.bottom + 4;
+      if (left < 8) left = 8;
+      if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+      menu.style.left = `${Math.round(left)}px`;
+      menu.style.top  = `${Math.round(top)}px`;
+    }
+
+    function closeMenu() {
+      menu.classList.add('hidden');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    toggleBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const opening = menu.classList.contains('hidden');
+      if (opening) {
+        menu.classList.remove('hidden');
+        positionMenu();
+      } else {
+        closeMenu();
+      }
+      toggleBtn.setAttribute('aria-expanded', String(opening));
+    });
+    document.addEventListener('click', closeMenu);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+  }
+
+  // ── Mobile: sidebar overlay ─────────────────────────────
+  {
+    const sidebar = qs('#sidebar');
+    const overlay = qs('#sidebar-overlay');
+    function openSidebar() {
+      sidebar.classList.add('open');
+      overlay.classList.add('visible');
+    }
+    function closeSidebar() {
+      sidebar.classList.remove('open');
+      overlay.classList.remove('visible');
+    }
+    qs('#mobile-sidebar-btn').addEventListener('click', openSidebar);
+    qs('#mobile-notes-sidebar-btn').addEventListener('click', openSidebar);
+    overlay.addEventListener('click', closeSidebar);
+    // Close sidebar on any nav/project item click on mobile
+    sidebar.addEventListener('click', e => {
+      if (window.innerWidth <= 768 && e.target.closest('.nav-item, .project-nav-item')) {
+        closeSidebar();
+      }
+    });
+  }
+
+  // ── Mobile: notes back button ────────────────────────────
+  qs('#notes-back-btn').addEventListener('click', () => {
+    qs('.notes-layout').classList.remove('show-editor');
   });
 
   // ── Bootstrap ──────────────────────────────────────────
