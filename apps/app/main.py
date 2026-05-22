@@ -6,8 +6,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from database import init_db
-from routers import notes, tasks
-from routers import projects
+from routers import notes, tasks, projects, folders
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
@@ -23,6 +22,7 @@ app = FastAPI(title="Tasks & Notes", lifespan=lifespan)
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(tasks.router,    prefix="/api/tasks",    tags=["tasks"])
 app.include_router(notes.router,    prefix="/api/notes",    tags=["notes"])
+app.include_router(folders.router,  prefix="/api/folders",  tags=["folders"])
 
 
 # Serve static files with no-cache headers so dev reloads always pick up changes

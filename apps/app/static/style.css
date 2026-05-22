@@ -1069,6 +1069,62 @@ select { cursor: pointer; }
 .note-tag-pill:hover { border-color: var(--primary); color: var(--primary); }
 .note-tag-pill.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
 
+.note-folder-list {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: 4px 6px;
+}
+.note-folder-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: var(--r);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+  transition: all 0.1s;
+  user-select: none;
+}
+.note-folder-item:hover { background: var(--surface); color: var(--text); }
+.note-folder-item.active { background: var(--primary-light); color: var(--primary); font-weight: 500; }
+.note-folder-icon { font-size: 12px; flex-shrink: 0; }
+.note-folder-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-folder-actions { opacity: 0; transition: opacity 0.1s; }
+.note-folder-item:hover .note-folder-actions { opacity: 1; }
+.note-folder-actions button {
+  background: none; border: none; cursor: pointer;
+  font-size: 13px; color: var(--text-muted); padding: 1px 3px;
+  border-radius: 3px; line-height: 1;
+}
+.note-folder-actions button:hover { color: var(--text); background: var(--border); }
+.note-folder-add {
+  padding: 4px 6px 6px;
+}
+.note-folder-add button {
+  width: 100%; text-align: left; background: none; border: none;
+  font-size: 12px; color: var(--text-light); cursor: pointer;
+  padding: 4px 6px; border-radius: var(--r); font-family: inherit;
+  transition: color 0.1s;
+}
+.note-folder-add button:hover { color: var(--primary); }
+
+.note-folder-select {
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  padding: 3px 6px;
+  outline: none;
+  cursor: pointer;
+  max-width: 140px;
+  flex-shrink: 0;
+  transition: border-color 0.12s;
+}
+.note-folder-select:focus { border-color: var(--border-focus); color: var(--text); }
+
 .note-list { overflow-y: auto; flex: 1; padding: 6px; }
 
 .note-item {

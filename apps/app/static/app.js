@@ -35,9 +35,11 @@ const state = {
   activeNoteId: null,
   noteSearch:   '',
   noteDirty:    false,
-  noteMode:      'edit',   // 'edit' | 'preview'
-  noteTagFilter: '',
-  noteTags:      [],       // full tag list, preserved across filter changes
+  noteMode:        'edit',   // 'edit' | 'preview'
+  noteTagFilter:   '',
+  noteTags:        [],       // full tag list, preserved across filter changes
+  activeFolderId:  null,     // null = All Notes
+  folders:         [],
 
   // Modal state
   editingProjectId: null,
@@ -1311,15 +1313,90 @@ function toggleNoteMode() {
 // ── Notes ──────────────────────────────────────────────────
 async function loadNotes() {
   const p = new URLSearchParams();
-  if (state.noteSearch)   p.set('search', state.noteSearch);
+  if (state.noteSearch)    p.set('search', state.noteSearch);
   if (state.noteTagFilter) p.set('tag', state.noteTagFilter);
+  if (state.activeFolderId !== null) p.set('folder_id', state.activeFolderId);
   state.notes = await api('GET', `api/notes${p.toString() ? '?' + p : ''}`);
   // Rebuild the full tag list only when not filtering so pills don't shrink
-  if (!state.noteTagFilter) {
+  if (!state.noteTagFilter && state.activeFolderId === null) {
     state.noteTags = [...new Set(state.notes.flatMap(n => n.tags))].sort();
   }
   renderNoteList();
   renderNoteTags();
+}
+
+async function loadFolders() {
+  state.folders = await api('GET', 'api/folders');
+  renderFolderList();
+}
+
+function renderFolderList() {
+  const el = qs('#note-folder-list');
+  const allActive = state.activeFolderId === null;
+
+  const rows = state.folders.map(f => `
+    <div class="note-folder-item${f.id === state.activeFolderId ? ' active' : ''}" data-id="${f.id}">
+      <span class="note-folder-icon">📁</span>
+      <span class="note-folder-name">${esc(f.name)}</span>
+      <span class="note-folder-actions">
+        <button class="js-rename-folder" data-id="${f.id}" title="Rename">✎</button>
+        <button class="js-delete-folder" data-id="${f.id}" title="Delete">×</button>
+      </span>
+    </div>
+  `).join('');
+
+  el.innerHTML = `
+    <div class="note-folder-item${allActive ? ' active' : ''}" data-id="all">
+      <span class="note-folder-icon">🗂</span>
+      <span class="note-folder-name">All Notes</span>
+    </div>
+    ${rows}
+    <div class="note-folder-add">
+      <button id="new-folder-btn">+ New Folder</button>
+    </div>
+  `;
+
+  el.querySelectorAll('.note-folder-item').forEach(item => {
+    item.addEventListener('click', e => {
+      if (e.target.closest('.note-folder-actions')) return;
+      state.activeFolderId = item.dataset.id === 'all' ? null : +item.dataset.id;
+      loadNotes();
+      renderFolderList();
+    });
+  });
+
+  el.querySelectorAll('.js-rename-folder').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const folder = state.folders.find(f => f.id === +btn.dataset.id);
+      const name = prompt('Rename folder:', folder?.name)?.trim();
+      if (!name || name === folder?.name) return;
+      await api('PUT', `api/folders/${btn.dataset.id}`, { name });
+      await loadFolders();
+    });
+  });
+
+  el.querySelectorAll('.js-delete-folder').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const folder = state.folders.find(f => f.id === +btn.dataset.id);
+      if (!confirm(`Delete folder "${folder?.name}"? Notes inside will become unorganised.`)) return;
+      if (state.activeFolderId === +btn.dataset.id) state.activeFolderId = null;
+      await api('DELETE', `api/folders/${btn.dataset.id}`);
+      await loadFolders();
+      await loadNotes();
+    });
+  });
+
+  const newBtn = qs('#new-folder-btn');
+  if (newBtn) {
+    newBtn.addEventListener('click', async () => {
+      const name = prompt('Folder name:')?.trim();
+      if (!name) return;
+      await api('POST', 'api/folders', { name });
+      await loadFolders();
+    });
+  }
 }
 
 async function createNote() {
@@ -1330,10 +1407,12 @@ async function createNote() {
 
 async function saveNote() {
   if (!state.activeNoteId) return;
-  const title   = qs('#note-title').value.trim() || 'Untitled';
-  const content = qs('#note-content').value;
-  const tags    = qs('#note-tags').value.split(',').map(t => t.trim()).filter(Boolean);
-  await api('PUT', `api/notes/${state.activeNoteId}`, { title, content, tags });
+  const title     = qs('#note-title').value.trim() || 'Untitled';
+  const content   = qs('#note-content').value;
+  const tags      = qs('#note-tags').value.split(',').map(t => t.trim()).filter(Boolean);
+  const folderVal = qs('#note-folder-select').value;
+  const folder_id = folderVal ? +folderVal : null;
+  await api('PUT', `api/notes/${state.activeNoteId}`, { title, content, tags, folder_id });
   state.noteDirty = false;
   await loadNotes();
   toast('Note saved');
@@ -1357,6 +1436,12 @@ async function openNote(id) {
   qs('#note-title').value   = note.title;
   qs('#note-content').value = note.content;
   qs('#note-tags').value    = note.tags.join(', ');
+  // Populate folder select
+  const folderSel = qs('#note-folder-select');
+  folderSel.innerHTML = '<option value="">No folder</option>' +
+    state.folders.map(f =>
+      `<option value="${f.id}"${f.id === note.folder_id ? ' selected' : ''}>${esc(f.name)}</option>`
+    ).join('');
   qs('#note-backlinks').classList.add('hidden');
   showNoteEditor(true);
   applyNoteMode();
@@ -1511,6 +1596,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     qs('#notes-workspace').classList.add('active');
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
     qs('#notes-nav-btn').classList.add('active');
+    loadFolders();
     loadNotes();
   });
 
@@ -1683,6 +1769,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   ['#note-title','#note-content','#note-tags'].forEach(sel =>
     qs(sel).addEventListener('input', () => { state.noteDirty = true; })
   );
+  qs('#note-folder-select').addEventListener('change', () => { state.noteDirty = true; });
 
   // ── Keyboard shortcuts ─────────────────────────────────
   document.addEventListener('keydown', e => {

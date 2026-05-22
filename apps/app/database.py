@@ -95,6 +95,17 @@ async def init_db() -> None:
                 (inbox_id,),
             )
 
+        # ── Note folders ──────────────────────────────────────
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS folders (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT    NOT NULL,
+                sort_order  INTEGER NOT NULL DEFAULT 0,
+                created_at  TEXT    NOT NULL,
+                updated_at  TEXT    NOT NULL
+            )
+        """)
+
         # ── Notes ─────────────────────────────────────────────
         await db.execute("""
             CREATE TABLE IF NOT EXISTS notes (
@@ -106,6 +117,12 @@ async def init_db() -> None:
                 updated_at  TEXT    NOT NULL
             )
         """)
+
+        # ── Migrate: add folder_id to notes if missing ────────
+        if not await _column_exists(db, "notes", "folder_id"):
+            await db.execute(
+                "ALTER TABLE notes ADD COLUMN folder_id INTEGER REFERENCES folders(id) ON DELETE SET NULL"
+            )
 
         await db.commit()
 
