@@ -1605,6 +1605,48 @@ select { cursor: pointer; }
 /* ── Misc ────────────────────────────────────────────────── */
 .hidden { display: none !important; }
 
+/* ── Split button (Save + ▼ dropdown) ───────────────────── */
+.split-btn {
+  position: relative;
+  display: flex;
+}
+.split-btn-main {
+  border-radius: var(--r) 0 0 var(--r) !important;
+}
+.split-btn-arrow {
+  border-left: 1px solid var(--primary-hover) !important;
+  border-radius: 0 var(--r) var(--r) 0 !important;
+  padding: 6px 8px !important;
+  font-size: 10px !important;
+}
+.split-btn-menu {
+  position: fixed;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  z-index: 50;
+  min-width: 140px;
+  padding: 4px;
+}
+.split-btn-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: calc(var(--r) - 2px);
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  transition: background 0.1s;
+}
+.split-btn-item:hover { background: var(--bg-subtle); }
+.split-btn-item--danger { color: var(--danger); }
+.split-btn-item--danger:hover { background: var(--p-high-bg); }
+
 /* ── Mobile menu button (hidden on desktop) ──────────────── */
 .mobile-menu-btn {
   display: none;

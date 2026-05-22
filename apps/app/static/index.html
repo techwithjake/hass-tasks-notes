@@ -176,8 +176,13 @@
               <select id="note-folder-select" class="note-folder-select"></select>
               <div class="editor-actions">
                 <button id="note-mode-btn" class="btn-mode">Preview</button>
-                <button id="delete-note-btn" class="btn-danger">Delete</button>
-                <button id="save-note-btn" class="btn-primary">Save</button>
+                <div class="split-btn">
+                  <button id="save-note-btn" class="btn-primary split-btn-main">Save</button>
+                  <button id="note-actions-btn" class="btn-primary split-btn-arrow" aria-label="More actions" aria-haspopup="true" aria-expanded="false">&#9660;</button>
+                  <div id="note-actions-menu" class="split-btn-menu hidden" role="menu">
+                    <button id="delete-note-btn" class="split-btn-item split-btn-item--danger" role="menuitem">Delete note</button>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="editor-tags-row">

@@ -1828,6 +1828,42 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // ── Notes: Save/Delete split-button dropdown ────────────
+  {
+    const toggleBtn = qs('#note-actions-btn');
+    const menu      = qs('#note-actions-menu');
+
+    function positionMenu() {
+      const rect    = toggleBtn.getBoundingClientRect();
+      const menuW   = Math.max(menu.offsetWidth, 140);
+      let left = rect.right - menuW;
+      let top  = rect.bottom + 4;
+      if (left < 8) left = 8;
+      if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+      menu.style.left = `${Math.round(left)}px`;
+      menu.style.top  = `${Math.round(top)}px`;
+    }
+
+    function closeMenu() {
+      menu.classList.add('hidden');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    toggleBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const opening = menu.classList.contains('hidden');
+      if (opening) {
+        menu.classList.remove('hidden');
+        positionMenu();
+      } else {
+        closeMenu();
+      }
+      toggleBtn.setAttribute('aria-expanded', String(opening));
+    });
+    document.addEventListener('click', closeMenu);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+  }
+
   // ── Mobile: sidebar overlay ─────────────────────────────
   {
     const sidebar = qs('#sidebar');
